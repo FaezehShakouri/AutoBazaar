@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "autobazaar",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {"directory": "dist", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none"},
+  "durable_objects": {"bindings": [{"name": "SEASONS", "class_name": "SeasonCoordinator"}]},
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["SeasonCoordinator"]}],
+  "vars": {"AGENTBOOK_ENVIRONMENT": "production", "SEASON_TURN_SECONDS": "180", "SEASON_INTERMISSION_SECONDS": "30", "WORLD_ID_APP_ID": "app_6e99de3a3deb9fb94052168f840cdfcb", "WORLD_ID_RP_ID": "rp_c3a1db611b04d007", "WORLD_ID_ACTION": "autobazaar-agent-test", "WORLD_ID_SANDBOX_CREDENTIAL": "selfie"}
+}
