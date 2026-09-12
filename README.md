@@ -1,19 +1,31 @@
-# Vending Arena
+# Vending Plaza
 
-A spectator-first simulation game: four independent agents register for a round, run vending machines in a shared customer market, and compete to capture a finite customer wallet.
+A Three.js spectator game: four independent agents run vending machines in a little 3D neighborhood and compete to capture a finite customer wallet. Watch animated customers walk to the machines, collect their purchases, and leave. Explore the plaza, inspect its shopkeepers, and follow every recorded event.
 
 Inspired by [Andon Labs Vending-Bench 2 and Arena](https://andonlabs.com/evals/vending-bench-2). This is an independent implementation, not a reproduction of their benchmark or published scores.
 
 ## Run
 
-Requires Node.js 20 or newer. No npm dependencies or installation required.
+Requires Node.js 20 or newer and a browser with WebGL 2. The pinned Three.js modules are included in `dist/vendor`, so the game starts without a CDN or an install step. To update those bundled files from the locked dependency, run `npm ci` followed by `npm run build`.
 
 ```sh
 npm start
 # Open http://127.0.0.1:3000
 ```
 
-The default browser mode uses four explicitly labeled built-in policies. In the lobby, each of the four agents provides $1,000: a fixed $500 registration stake is transferred into the shared customer wallet, and a separate $500 becomes that agent's operating cash. The market opens after all four register. Select **Codex agents** before registration to play with real model decisions. Click **Next day** for one market day or **Run round** to continue. Pausing stops before the next day; an in-flight decision completes first. Each active agent makes one Codex call per day. Real inference usage belongs to your configured Codex account and is not deducted from simulated cash.
+The default browser mode uses four explicitly labeled built-in strategies. In the lobby, each of the four agents provides $1,000: a fixed $500 registration stake is transferred into the shared customer wallet, and a separate $500 becomes that agent's operating cash. Choose **Fill lobby**, then **Open the plaza** to start watching. Select **Local Codex agents** before registration to play with real model decisions. Each active agent makes one Codex call per day. Real inference usage belongs to your configured Codex account and is not deducted from simulated cash.
+
+## Explore the game
+
+- Drag to orbit, scroll/pinch to zoom, and right-drag or two-finger drag to pan. **H** resets the camera; the camera buttons also offer cinematic orbit and fullscreen.
+- Click a 3D machine or its roster card to focus the camera and inspect prices, stock, cash, strategy, private notebook, and incoming deliveries. Click a customer to inspect the corresponding purchase receipt.
+- **Pause / Resume** (or **Space**) freezes/resumes visual playback. **1× / 2× / 4×** changes playback speed. **Next day** advances one day; **Run plaza** continues automatically. An in-flight Codex decision completes before stopping at the end of its playback.
+- **Replay** watches the current day's purchases again. **Skip** completes the playback immediately. Neither changes the settled simulation or creates new sales.
+- **Monitor** opens the activity log, full customer ledger, demand factors, and financial chart. **Escape** closes the inspector and monitor. Export JSON for the complete run.
+
+The park contains colored vending cabinets with shelves, products, keypads, and dispensing slots, plus a café, trees, benches, and a delivery van. The simulation's weather drives the scene's sky and light: rain brings falling raindrops, puddles, and customer umbrellas; hot days have warm sunshine. Lighting travels across the plaza during each day's playback. Names, outfits, clouds, and lobby passersby are decorative.
+
+Market days still settle atomically before their visual playback. Each animated purchase corresponds to exactly one engine receipt; visible stock and the shared wallet count down as those receipts play. Machine inspectors, financial totals, and the monitor show settled data. Pausing, replaying, resizing, or rendering fewer frames cannot affect customer demand or the winner. Background tabs suspend animation.
 
 ## Codex harness
 
@@ -44,7 +56,7 @@ npm test
 npm run check
 ```
 
-CLI runs save their state to `.runs/<mode>-<seed>.json` after each day. `--max-days` is a runner safety limit, not a normal round-ending rule. The server writes `.runs/latest.json` atomically after each completed Codex day. **Export round JSON** downloads the current browser-visible state and full event log. Browser refresh starts a fresh lobby; automatic resume/import is not implemented. Repeating a seed reproduces market outcomes for identical decisions; model decisions themselves are not deterministic.
+CLI runs save their state to `.runs/<mode>-<seed>.json` after each day. `--max-days` is a runner safety limit, not a normal round-ending rule. The server writes `.runs/latest.json` atomically after each completed Codex day. **Export JSON** in the monitor downloads the current browser-visible state and full event log. Browser refresh starts a fresh lobby; automatic resume/import is not implemented. Repeating a seed reproduces market outcomes for identical decisions; model decisions themselves are not deterministic.
 
 ## Simulation rules
 
@@ -65,10 +77,14 @@ The published model does not include numeric coefficients, cached product triple
 
 - `dist/engine.js`: pure shared simulation, observation boundaries, decision validation, and built-in policies.
 - `dist/sales-model.js`: source-linked demand pipeline, versioned local calibration, calendar and competition allocation.
-- `dist/app.js`, `dist/style.css`, `dist/game.css`, `dist/index.html`: browser spectator interface, no framework required.
+- `dist/game-app.js`, `dist/plaza.css`, `dist/index.html`: game HUD, lobby, inspector, monitor, and simulation controls.
+- `dist/world.js`: Three.js scene, machine models, NPC movement, weather, camera, and picking.
+- `dist/playback.js`: frame-independent receipt playback, separated from engine state.
+- `dist/vendor/`, `scripts/vendor.mjs`: pinned, locally served Three.js runtime and controls, with its MIT license.
+- `dist/app.js`, `dist/style.css`, `dist/game.css`: retained previous dashboard assets; no longer the default interface.
 - `lib/codex.mjs`: schema, prompts, and local Codex subprocess adapter.
 - `server.mjs`: loopback HTTP API, atomic decision rounds and snapshots.
 - `scripts/simulate.mjs`: headless demo/Codex round runner.
-- `tests/`: accounting, reproducibility, inventory, privacy, bankruptcy, demand and API tests.
+- `tests/`: accounting, reproducibility, inventory, privacy, bankruptcy, demand, API, and playback tests.
 
-The privately hosted Sites version serves the browser demo only. Codex requires the local Node process; it cannot execute inside a static hosted page. Optional WebMCP tools expose read-only state and paused demo advancement when the browser supports them.
+Static hosting serves the browser demo only. Codex requires the local Node process; it cannot execute inside a static hosted page. An optional WebMCP tool exposes read-only state and playback status when the browser supports it.

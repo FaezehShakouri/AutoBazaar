@@ -10,6 +10,11 @@ test('API commits a complete round, exports state and rejects cross-origin calls
   const {base,post}=await fixture(t,async()=>decision);
   assert.equal((await fetch(base+'/')).status,200);
   assert.equal((await fetch(base+'/sales-model.js')).status,200);
+  for(const path of ['/game-app.js','/world.js','/playback.js','/vendor/three.module.js','/vendor/three.core.js','/vendor/OrbitControls.js']){
+    const asset=await fetch(base+path);assert.equal(asset.status,200,path);assert.match(asset.headers.get('content-type'),/javascript/);assert.ok((await asset.text()).length>0);
+  }
+  assert.equal((await fetch(base+'/plaza.css')).status,200);
+  assert.equal((await fetch(base+'/.runs/latest.json')).status,404);
   assert.equal((await post('/api/reset',{seed:9,startDate:'2025-06-01'})).status,200);
   for(const id of ['atlas','penny','nova','sage'])assert.equal((await post('/api/register',{id})).status,200);
   assert.equal((await post('/api/start')).status,200);

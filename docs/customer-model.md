@@ -48,6 +48,14 @@ This keeps machines competing and prevents multiplying market demand by the numb
 
 The spectator UI and JSON export include the day situation, traffic and seasonal multipliers, expected demand, noise, wanted/bought/unserved counts, available stock, per-machine factors and allocations, and individual purchase receipts with the wallet balance after each purchase. The event log records agent decisions, price changes, restocking, orders, deliveries, fees, sales, customer outcomes, warnings and closures. Agents receive their own sales history, the date/weather situation, and public competitor prices; they do not receive opponents’ hidden state or the simulator’s product calibration.
 
+## 3D customer visualization
+
+The Three.js plaza adds a visual layer over this same sales model. Each daily receipt schedules one character to approach its assigned machine, collect the purchased product, and exit the plaza. Customers have decorative names, outfits, and walking animations. Rainy weather gives them umbrellas and changes the scene's sky, lighting, and puddles. These visual choices do not feed into demand or add a separate customer identity model. Lobby passersby do not buy anything.
+
+The engine settles the entire day first; `dist/playback.js` then emits its recorded receipts in order against a separate visual clock. A purchase occurs four visual seconds after its character enters, with visits staggered by 0.48 seconds. Visible machine stock and the displayed wallet follow those receipts. Financial reports and machine inspectors always show the completed day. Pause, speed changes, skip, and replay affect the presentation only: they never spend money again, alter orders, or call agents again. The next automatic market day waits until playback finishes.
+
+Click a character to inspect its matching receipt, and click a machine to inspect the agent. The monitor retains the full ledger and log, including events that are not separately animated. NPC movement is an illustration of settled purchases, not a new simulation of individual preferences or an additional benchmark claim.
+
 ## Other scope boundaries
 
 We removed the fabricated festival/closure schedule and automatic 1.2% refunds. Vending-Bench 2 describes customer complaints, but provides no numerical rate; an interactive complaint/refund system is not implemented here. Sales revenue still settles immediately into bank cash. The published cash-collection and delayed-card-settlement mechanics remain outside this customer-demand change. Supplier procurement, fees and existing machine capacities also remain local game rules.

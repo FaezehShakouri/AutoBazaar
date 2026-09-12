@@ -58,10 +58,10 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
         return json(res,404,{error:'Unknown endpoint.'});
       }
       if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'Method not allowed.'});
-      const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/engine.js':'engine.js','/sales-model.js':'sales-model.js','/style.css':'style.css','/game.css':'game.css'};
+      const files=Object.fromEntries(['index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']='index.html';
       if(!files[path])return json(res,404,{error:'Not found.'});
       const body=await readFile(join(root,'dist',files[path]));
-      res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
+      res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
     }catch(e){json(res,400,{error:e.message});}
   });
 }
