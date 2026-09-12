@@ -1,5 +1,11 @@
 node_modules/
 .env
+.env.*
+!.env.example
+.agent.env
+.dev.vars
+.wrangler/
+.worker-build/
 .runs/
 .DS_Store
 *.tgz
