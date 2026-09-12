@@ -2,7 +2,7 @@ import http from 'node:http';
 import {readFile,mkdir,writeFile,rename} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
-import {createGame,prepareDay,settleDay,observation} from './dist/engine.js';
+import {createGame,registerAgent,startRound,prepareDay,settleDay,observation} from './dist/engine.js';
 import {codexDecision} from './lib/codex.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
@@ -21,12 +21,20 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
           if(req.headers.origin&&req.headers.origin!==`http://${host}`)return json(res,403,{error:'Cross-origin request rejected.'});
           if(req.headers['content-type']!=='application/json')return json(res,415,{error:'Use application/json.'});
         }
-        if(path==='/api/status'&&req.method==='GET')return json(res,200,{local:true,busy,mode:game.mode,day:game.day});
+        if(path==='/api/status'&&req.method==='GET')return json(res,200,{local:true,busy,mode:game.mode,phase:game.phase,day:game.day});
         if(path==='/api/state'&&req.method==='GET')return json(res,200,game);
         if(path==='/api/reset'&&req.method==='POST'){
           if(busy)return json(res,409,{error:'Wait for the current decision round to finish.'});
           const body=await readBody(req);
-          const fresh=createGame({seed:body.seed,days:body.days,startDate:body.startDate,mode:'codex'});game=fresh;return json(res,200,game);
+          const fresh=createGame({seed:body.seed,startDate:body.startDate,minimumEntry:body.minimumEntry,mode:'codex'});game=fresh;return json(res,200,game);
+        }
+        if(path==='/api/register'&&req.method==='POST'){
+          if(busy)return json(res,409,{error:'Wait for the current operation to finish.'});
+          const body=await readBody(req);game=registerAgent(game,body.id,body.balance);return json(res,200,game);
+        }
+        if(path==='/api/start'&&req.method==='POST'){
+          if(busy)return json(res,409,{error:'Wait for the current operation to finish.'});
+          await readBody(req);game=startRound(game);return json(res,200,game);
         }
         if(path==='/api/step'&&req.method==='POST'){
           if(busy)return json(res,409,{error:'A decision round is already running.'});
@@ -50,7 +58,7 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
         return json(res,404,{error:'Unknown endpoint.'});
       }
       if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'Method not allowed.'});
-      const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/engine.js':'engine.js','/sales-model.js':'sales-model.js','/style.css':'style.css'};
+      const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/engine.js':'engine.js','/sales-model.js':'sales-model.js','/style.css':'style.css','/game.css':'game.css'};
       if(!files[path])return json(res,404,{error:'Not found.'});
       const body=await readFile(join(root,'dist',files[path]));
       res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);

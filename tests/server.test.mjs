@@ -10,21 +10,25 @@ test('API commits a complete round, exports state and rejects cross-origin calls
   const {base,post}=await fixture(t,async()=>decision);
   assert.equal((await fetch(base+'/')).status,200);
   assert.equal((await fetch(base+'/sales-model.js')).status,200);
-  assert.equal((await post('/api/reset',{seed:9,days:30,startDate:'2025-06-01'})).status,200);
+  assert.equal((await post('/api/reset',{seed:9,startDate:'2025-06-01'})).status,200);
+  for(const id of ['atlas','penny','nova','sage'])assert.equal((await post('/api/register',{id,balance:50000})).status,200);
+  assert.equal((await post('/api/start')).status,200);
   const res=await post('/api/step');assert.equal(res.status,200);assert.equal((await res.json()).day,1);
   assert.equal((await(await fetch(base+'/api/state')).json()).agents[0].memory,'Save.');
   const state=await(await fetch(base+'/api/state')).json();
-  assert.equal(state.calendar.date,'2025-06-01');assert.equal(state.version,2);assert.equal(state.salesReport.length,6);
+  assert.equal(state.calendar.date,'2025-06-01');assert.equal(state.version,3);assert.equal(state.salesReport.length,6);assert.equal(state.customerBudgetTotal,200000);
   const bad=await fetch(base+'/api/step',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://example.com'},body:'{}'});assert.equal(bad.status,403);
-  assert.equal((await post('/api/reset',{seed:-1,days:365})).status,400);
+  assert.equal((await post('/api/reset',{seed:-1})).status,400);
 });
 test('a failed Codex call does not partially advance the market',async t=>{
   const {base,post}=await fixture(t,async o=>{if(o.self.id==='penny')throw new Error('Fake provider failure');return decision;});
+  for(const id of ['atlas','penny','nova','sage'])await post('/api/register',{id,balance:50000});await post('/api/start');
   const r=await post('/api/step');assert.equal(r.status,502);assert.match((await r.json()).error,/Penny/);
   assert.equal((await(await fetch(base+'/api/state')).json()).day,0);
 });
 test('concurrent steps cannot duplicate a round',async t=>{
   let release;const gate=new Promise(r=>release=r);let entered;const ready=new Promise(r=>entered=r);
   const {post}=await fixture(t,async()=>{entered();await gate;return decision;});
+  for(const id of ['atlas','penny','nova','sage'])await post('/api/register',{id,balance:50000});await post('/api/start');
   const first=post('/api/step');await ready;const second=await post('/api/step');assert.equal(second.status,409);release();assert.equal((await first).status,200);
 });

@@ -88,9 +88,12 @@ export function roundedDemand(expected,noiseFraction,draw){
   return {noise,units:Math.max(0,Math.round(expected+noise))};
 }
 
-export function simulateSales({agents,products,calendar,weather,seed,model=SALES_MODEL}){
+export function simulateSales({agents,products,calendar,weather,seed,model=SALES_MODEL,budget=Number.POSITIVE_INFINITY}){
+  if(!(budget===Number.POSITIVE_INFINITY||Number.isInteger(budget)&&budget>=0))throw new Error('Customer budget must be a non-negative integer number of cents.');
   const sold=Object.fromEntries(agents.map(a=>[a.id,Object.fromEntries(products.map(p=>[p.id,0]))]));
+  const payments=Object.fromEntries(agents.map(a=>[a.id,Object.fromEntries(products.map(p=>[p.id,0]))]));
   const reports=[];
+  let budgetRemaining=budget,spent=0,closingAdjustment=0;
   const assortment=Object.fromEntries(agents.map(a=>[a.id,products.filter(p=>a.inventory[p.id]>0).length]));
   for(const product of products){
     const candidates=agents.filter(a=>a.active&&a.inventory[product.id]>0).sort((a,b)=>a.id.localeCompare(b.id)).map(a=>({id:a.id,inventory:a.inventory[product.id],...expectedSales({product,price:a.prices[product.id],variety:assortment[a.id],calendar,weather,model})}));
@@ -102,16 +105,23 @@ export function simulateSales({agents,products,calendar,weather,seed,model=SALES
     // Local Arena extension. With one machine this reduces exactly to its
     // rounded, noisy, inventory-capped daily product prediction.
     for(let unit=0;unit<target;unit++){
+      if(budgetRemaining===0)break;
       const eligible=candidates.filter(a=>a.expected>0&&sold[a.id][product.id]<a.inventory);
       const weight=eligible.reduce((n,a)=>n+a.expected,0);
       if(weight<=0)break;
       let ticket=draw()*weight;
       for(let i=0;i<eligible.length;i++){
         ticket-=eligible[i].expected;
-        if(ticket<=0||i===eligible.length-1){sold[eligible[i].id][product.id]++;break;}
+        if(ticket<=0||i===eligible.length-1){
+          const winner=eligible[i],listed=agents.find(a=>a.id===winner.id).prices[product.id];
+          const payment=Math.min(listed,budgetRemaining);
+          sold[winner.id][product.id]++;payments[winner.id][product.id]+=payment;
+          spent+=payment;budgetRemaining-=payment;closingAdjustment+=listed-payment;
+          break;
+        }
       }
     }
     reports.push({product:product.id,expected,noise:prediction.noise,demand:prediction.units,sold:agents.reduce((n,a)=>n+sold[a.id][product.id],0),machines:candidates.map(a=>({...a,sold:sold[a.id][product.id]}))});
   }
-  return {sold,reports};
+  return {sold,payments,reports,spent,budgetRemaining,closingAdjustment};
 }
