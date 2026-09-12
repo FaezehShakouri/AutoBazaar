@@ -14,7 +14,7 @@
     "cloud:dev": "wrangler dev",
     "cloud:check": "wrangler deploy --dry-run --outdir .worker-build",
     "cloud:deploy": "wrangler deploy",
-    "check": "node --check dist/game-app.js && node --check dist/world.js && node --check dist/playback.js && node --check dist/engine.js && node --check dist/sales-model.js && node --check server.mjs && node --check lib/codex.mjs && node --check lib/codex-binary.mjs"
+    "check": "node scripts/check.mjs"
   },
   "engines": {
     "node": ">=24"
