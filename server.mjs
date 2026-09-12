@@ -2,21 +2,38 @@ import http from 'node:http';
 import {readFile,mkdir,writeFile,rename} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
+import {Readable} from 'node:stream';
 import {createGame,registerAgent,startRound,prepareDay,settleDay,observation} from './dist/engine.js';
 import {codexDecision} from './lib/codex.mjs';
+import {SeasonStore} from './lib/season-store.mjs';
+import {openSeasonDatabase} from './lib/sqlite.mjs';
+import {createSeasonApi} from './lib/season-api.mjs';
+import {agentBookConfig} from './lib/agentkit-auth.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
-export function createArenaServer({decide=codexDecision,saveDirectory=join(root,'.runs')}={}){
+export function createArenaServer({decide=codexDecision,saveDirectory=join(root,'.runs'),seasons,book,bookConfig=agentBookConfig(),publicOrigin}={}){
   let game=createGame({mode:'codex'}),busy=false;
+  const seasonApi=seasons?createSeasonApi({store:seasons,book,config:bookConfig,origin:publicOrigin}):null;
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   const readBody=async req=>{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw new Error('Request too large.');}return JSON.parse(body||'{}');};
-  return http.createServer(async(req,res)=>{
-    // Bind loopback only and reject cross-origin mutations / DNS-rebinding hosts.
+  const server=http.createServer(async(req,res)=>{
+    // A public server exposes only the season API. It can never launch Codex
+    // on behalf of a remote request or reset the local practice game.
     const host=req.headers.host||'';
-    if(!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host))return json(res,403,{error:'Local access only.'});
-    const path=new URL(req.url,`http://${host}`).pathname;
+    const loopback=/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host);
+    if(!loopback&&(!publicOrigin||host!==new URL(publicOrigin).host))return json(res,403,{error:'Unexpected Host header.'});
+    const origin=publicOrigin||`http://${host}`,url=new URL(req.url,origin),path=url.pathname;
     try{
+      if(path==='/api/seasons'||path.startsWith('/api/seasons/')){
+        if(!seasonApi)return json(res,503,{error:'Shared seasons are not enabled on this server.'});
+        const init={method:req.method,headers:req.headers};
+        if(!['GET','HEAD'].includes(req.method)){init.body=Readable.toWeb(req);init.duplex='half';}
+        const response=await seasonApi(new Request(url,init),{remoteAddress:req.socket.remoteAddress});
+        res.writeHead(response.status,Object.fromEntries(response.headers));return res.end(Buffer.from(await response.arrayBuffer()));
+      }
+      if(path==='/healthz')return json(res,200,{ok:true,seasons:Boolean(seasons)});
       if(path.startsWith('/api/')){
+        if(publicOrigin)return json(res,404,{error:'Only the authenticated season API is available publicly.'});
         if(req.method==='POST'){
           if(req.headers.origin&&req.headers.origin!==`http://${host}`)return json(res,403,{error:'Cross-origin request rejected.'});
           if(req.headers['content-type']!=='application/json')return json(res,415,{error:'Use application/json.'});
@@ -61,9 +78,11 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
       const files=Object.fromEntries(['index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']='index.html';
       if(!files[path])return json(res,404,{error:'Not found.'});
       const body=await readFile(join(root,'dist',files[path]));
-      res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
+      res.writeHead(200,{'Content-Type':/\.m?js$/.test(path)?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
     }catch(e){json(res,400,{error:e.message});}
   });
+  if(seasons){const timer=setInterval(()=>{try{seasons.tick();}catch(e){console.error('Season clock:',e.message);}},1000);timer.unref();server.on('close',()=>clearInterval(timer));}
+  return server;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
   const port=Number(process.env.PORT||3000);
@@ -71,13 +90,20 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
     console.error('PORT must be an integer between 1 and 65535.');
     process.exitCode=1;
   }else{
-    const server=createArenaServer();
+    const publicOrigin=process.env.PUBLIC_ORIGIN||undefined,bindAddress=process.env.BIND_ADDRESS||'127.0.0.1';
+    if(publicOrigin){const url=new URL(publicOrigin);if(url.origin!==publicOrigin||url.protocol!=='https:')throw Error('PUBLIC_ORIGIN must be an HTTPS origin without a trailing slash.');}
+    if(!['127.0.0.1','localhost','::1'].includes(bindAddress)&&!publicOrigin)throw Error('Set PUBLIC_ORIGIN before binding a public interface.');
+    const bookConfig=agentBookConfig(process.env);
+    const seasons=new SeasonStore({db:openSeasonDatabase(process.env.SEASON_DB||join(root,'.runs','seasons.sqlite')),bookScope:bookConfig.scope,turnMs:Number(process.env.SEASON_TURN_SECONDS||180)*1000,intermissionMs:Number(process.env.SEASON_INTERMISSION_SECONDS||30)*1000});
+    const server=createArenaServer({seasons,bookConfig,publicOrigin});
+    server.on('close',()=>seasons.close());
     server.on('error',error=>{
       if(error.code==='EADDRINUSE'){
         console.error(`Port ${port} is already in use. If Vending Arena is already running, open http://127.0.0.1:${port}. Otherwise stop the process using that port or choose another port, for example: PORT=${port===3001?3002:3001} npm start`);
       }else console.error(`Cannot start Vending Arena: ${error.message}`);
       process.exitCode=1;
     });
-    server.listen(port,'127.0.0.1',()=>console.log(`Vending Arena: http://127.0.0.1:${port}`));
+    server.listen(port,bindAddress,()=>console.log(`Vending Plaza: ${publicOrigin||`http://127.0.0.1:${port}`} · Seasons: /seasons`));
+    for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>server.close());
   }
 }
