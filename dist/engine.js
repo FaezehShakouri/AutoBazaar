@@ -20,27 +20,28 @@ export const PERSONALITIES = [
   {id:'sage',name:'Sage',color:'#89cbe9',strategy:'Conservative',brief:'Your starting hypothesis is disciplined cash reserves and steady replenishment. You may change strategy as evidence develops.'},
 ];
 export const REQUIRED_AGENTS = 4;
-export const MIN_ENTRY_BALANCE = 50000;
+export const REGISTRATION_STAKE = 50000;
+export const STARTING_CASH = 50000;
 const quantities = (n=0) => Object.fromEntries(PRODUCTS.map(p=>[p.id,n]));
 export const money = cents => (cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
-export function createGame({seed=42,mode='demo',startDate='2025-01-01',salesModel=SALES_MODEL,minimumEntry=MIN_ENTRY_BALANCE}={}) {
+export function createGame({seed=42,mode='demo',startDate='2025-01-01',salesModel=SALES_MODEL,registrationStake=REGISTRATION_STAKE,startingCash=STARTING_CASH}={}) {
   if(!Number.isInteger(seed)||seed<0||seed>4294967295) throw new Error('Seed must be an unsigned 32-bit integer.');
-  if(!Number.isInteger(minimumEntry)||minimumEntry<MIN_ENTRY_BALANCE) throw new Error('Minimum entry balance must be at least $500.');
+  if(!Number.isInteger(registrationStake)||registrationStake<REGISTRATION_STAKE) throw new Error('Registration stake must be at least $500.');
+  if(!Number.isInteger(startingCash)||startingCash<STARTING_CASH) throw new Error('Starting cash must be at least $500.');
   const calendar=dateForDay(startDate,0);
   validateSalesModel(salesModel,PRODUCTS);
-  return {version:3,round:1,requiredAgents:REQUIRED_AGENTS,minimumEntry,seed,rng:seed||1,day:0,mode,startDate,calendar,salesModel:structuredClone(salesModel),salesReport:[],phase:'lobby',finishReason:null,weather:'Mild',unitsSoldToday:0,customerBudgetTotal:0,customerBudgetRemaining:0,customerBudgetSpent:0,closingAdjustment:0,agents:PERSONALITIES.map(a=>({...a,registered:false,entryBalance:0,cash:0,inventory:quantities(),storage:quantities(),prices:Object.fromEntries(PRODUCTS.map(p=>[p.id,p.retail])),orders:[],revenue:0,spending:0,fees:0,refunds:0,sold:0,missedFees:0,arrears:0,active:false,memory:'',rationale:'Waiting to register for the round.',lastSales:quantities(),lastRevenue:0})),history:[],log:[],nextLogId:1};
+  return {version:4,round:1,requiredAgents:REQUIRED_AGENTS,registrationStake,startingCash,seed,rng:seed||1,day:0,mode,startDate,calendar,salesModel:structuredClone(salesModel),salesReport:[],customerTransactions:[],transactionHistory:[],daySituation:null,phase:'lobby',finishReason:null,weather:'Mild',unitsSoldToday:0,customerBudgetTotal:0,customerBudgetRemaining:0,customerBudgetSpent:0,closingAdjustment:0,agents:PERSONALITIES.map(a=>({...a,registered:false,registrationPaid:0,entryBalance:0,cash:0,inventory:quantities(),storage:quantities(),prices:Object.fromEntries(PRODUCTS.map(p=>[p.id,p.retail])),orders:[],revenue:0,spending:0,fees:0,refunds:0,sold:0,missedFees:0,arrears:0,active:false,memory:'',rationale:'Waiting to register for the round.',lastSales:quantities(),lastRevenue:0})),history:[],log:[],nextLogId:1};
 }
 function random(s){s.rng=(Math.imul(1664525,s.rng)+1013904223)>>>0;return s.rng/4294967296;}
 function log(s,agent,type,text){s.log.push({id:s.nextLogId++,day:s.day,agent,type,text});}
-export function registerAgent(state,id,balance=MIN_ENTRY_BALANCE){
+export function registerAgent(state,id){
   const s=structuredClone(state);
   if(s.phase!=='lobby')throw new Error('Registration is closed for this round.');
-  if(!Number.isInteger(balance)||balance<s.minimumEntry)throw new Error(`Entry balance must be at least ${money(s.minimumEntry)}.`);
   const agent=s.agents.find(a=>a.id===id);if(!agent)throw new Error('Unknown agent slot.');
   if(agent.registered)throw new Error(`${agent.name} is already registered.`);
-  agent.registered=true;agent.active=true;agent.entryBalance=balance;agent.cash=balance;agent.rationale=`Registered with ${money(balance)}.`;
-  s.customerBudgetTotal+=balance;s.customerBudgetRemaining+=balance;
-  log(s,id,'registration',`${agent.name} registered with ${money(balance)}. Customer budget is now ${money(s.customerBudgetTotal)}.`);
+  agent.registered=true;agent.active=true;agent.registrationPaid=s.registrationStake;agent.entryBalance=s.startingCash;agent.cash=s.startingCash;agent.rationale=`Paid ${money(s.registrationStake)} to register and received ${money(s.startingCash)} operating cash.`;
+  s.customerBudgetTotal+=s.registrationStake;s.customerBudgetRemaining+=s.registrationStake;
+  log(s,id,'registration',`${agent.name} paid a ${money(s.registrationStake)} registration stake into the customer wallet and starts with ${money(s.startingCash)} operating cash.`);
   return s;
 }
 export function startRound(state){
@@ -57,11 +58,14 @@ export function prepareDay(state){
   if(s.phase==='finished') return s;
   if(s.phase!=='ready') throw new Error(s.phase==='lobby'?'Wait for all agents and start the round first.':'This day is already prepared.');
   s.day++;s.phase='deciding';
-  if(s.version!==3)throw new Error('Start a new round to use the updated game rules.');
+  if(s.version!==4)throw new Error('Start a new round to use the updated game rules.');
   s.calendar=dateForDay(s.startDate,s.day);
   s.weather=weatherForDay(s.seed,s.calendar.date,s.salesModel);
-  s.unitsSoldToday=0;s.salesReport=[];
-  log(s,null,'market',`${s.calendar.date} · ${s.weather} · daily product demand model`);
+  s.unitsSoldToday=0;s.salesReport=[];s.customerTransactions=[];
+  const weekday=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][s.calendar.weekday];
+  const traffic=s.salesModel.calibration.weekdays[s.calendar.weekday];
+  s.daySituation={date:s.calendar.date,weekday,weather:s.weather,trafficMultiplier:traffic,seasonMultiplier:s.salesModel.calibration.months[s.calendar.month],headline:`${weekday} · ${s.weather} weather · ${traffic>=1.1?'busy':traffic<1?'quiet':'normal'} expected foot traffic`,weatherEffect:s.weather==='Hot'?'Customers favor drinks in the heat.':s.weather==='Rainy'?'Rain reduces demand across drinks and snacks.':'Mild weather leaves product demand unchanged.'};
+  log(s,null,'situation',s.daySituation.headline);
   for(const a of s.agents){
     if(!a.active)continue;
     a.previousSales={...a.lastSales};a.previousRevenue=a.lastRevenue;
@@ -73,7 +77,7 @@ export function prepareDay(state){
 }
 export function observation(s,id){
   const self=s.agents.find(a=>a.id===id);if(!self)throw new Error('Unknown agent');
-  return structuredClone({round:s.round,day:s.day,weather:s.weather,date:s.calendar.date,customerBudget:{total:s.customerBudgetTotal,remaining:s.customerBudgetRemaining,spent:s.customerBudgetSpent},self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer USD cents',minimumEntry:s.minimumEntry,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Highest bank cash when the shared customer budget reaches zero; stock has no liquidation value',settlement:'Registration balance remains working capital and is mirrored into the shared customer wallet. Orders are paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales drain the customer wallet and settle automatically. The final sale may be paid with the exact remaining wallet balance. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt or real purchases.',customerChoice:'Daily product demand uses price elasticity against a reference price, baseline sales, weekday, month, weather, assortment variety, noise and inventory caps. Competing machines share per-product demand weighted by their standalone expected sales. This follows the public paper structure with local calibration and a local Arena allocation rule.'}});
+  return structuredClone({round:s.round,day:s.day,weather:s.weather,date:s.calendar.date,daySituation:s.daySituation,customerBudget:{total:s.customerBudgetTotal,remaining:s.customerBudgetRemaining,spent:s.customerBudgetSpent},self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer USD cents',registrationStake:s.registrationStake,startingCash:s.startingCash,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Highest bank cash when the shared customer budget reaches zero; stock has no liquidation value',settlement:'Each agent pays a registration stake into the shared customer wallet and separately receives starting operating cash. Orders are paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales drain the customer wallet and settle automatically. The final sale may be paid with the exact remaining wallet balance. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt or real purchases.',customerChoice:'Daily product demand uses price elasticity against a reference price, baseline sales, weekday, month, weather, assortment variety, noise and inventory caps. Competing machines share per-product demand weighted by their standalone expected sales. This follows the public paper structure with local calibration and a local Arena allocation rule.'}});
 }
 export function validateDecision(d){
   if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Decision must be an object.');
@@ -97,7 +101,8 @@ export function settleDay(state,decisions){
     let d;try{d=validateDecision(decisions[a.id]);}catch(e){log(s,a.id,'error',`No action: ${e.message}`);continue;}
     Object.assign(a.prices,d.prices);a.rationale=d.rationale;a.memory=d.memory;
     log(s,a.id,'decision',d.rationale);
-    for(const [id,n] of Object.entries(d.load)){const moved=Math.min(n,a.storage[id],30-a.inventory[id]);a.storage[id]-=moved;a.inventory[id]+=moved;}
+    if(Object.keys(d.prices).length)log(s,a.id,'pricing',`Updated ${Object.keys(d.prices).length} price${Object.keys(d.prices).length===1?'':'s'}: ${Object.entries(d.prices).map(([id,price])=>`${PRODUCTS.find(p=>p.id===id).name} ${money(price)}`).join(', ')}.`);
+    for(const [id,n] of Object.entries(d.load)){const moved=Math.min(n,a.storage[id],30-a.inventory[id]);a.storage[id]-=moved;a.inventory[id]+=moved;if(moved)log(s,a.id,'restock',`Loaded ${moved} ${PRODUCTS.find(p=>p.id===id).name} into the machine.`);}
     for(const o of d.orders){
       const p=PRODUCTS.find(p=>p.id===o.product),supplier=SUPPLIERS.find(x=>x.id===o.supplier);
       const total=quote(p,supplier,o.quantity)*o.quantity;
@@ -109,7 +114,7 @@ export function settleDay(state,decisions){
     }
   }
   const sales=simulateSales({agents:s.agents,products:PRODUCTS,calendar:s.calendar,weather:s.weather,seed:s.seed,model:s.salesModel,budget:s.customerBudgetRemaining});
-  s.salesReport=sales.reports;
+  s.salesReport=sales.reports;s.customerTransactions=sales.transactions.map(transaction=>({...transaction,day:s.day,date:s.calendar.date}));s.transactionHistory.push(...s.customerTransactions);
   for(const a of s.agents){
     for(const p of PRODUCTS){
       const units=sales.sold[a.id][p.id],revenue=sales.payments[a.id][p.id];
@@ -118,10 +123,15 @@ export function settleDay(state,decisions){
     }
   }
   s.customerBudgetRemaining=sales.budgetRemaining;s.customerBudgetSpent+=sales.spent;s.closingAdjustment+=sales.closingAdjustment;
+  for(const report of sales.reports){
+    const product=PRODUCTS.find(p=>p.id===report.product);
+    const allocations=report.machines.filter(m=>m.sold).map(m=>`${s.agents.find(a=>a.id===m.id).name} ${m.sold}`).join(', ');
+    log(s,null,'customers',`${product.name}: ${report.demand} wanted, ${report.sold} bought${report.unserved?`, ${report.unserved} unserved`:''}${allocations?` · ${allocations}`:''}.`);
+  }
   for(const a of s.agents){
     if(!a.active)continue;
     const due=200+a.arrears;
-    if(a.cash>=due){a.cash-=due;a.fees+=due;a.arrears=0;a.missedFees=0;}else{a.arrears+=200;a.missedFees++;log(s,a.id,'warning',`Operating fee unpaid (${a.missedFees}/10 days).`);}
+    if(a.cash>=due){a.cash-=due;a.fees+=due;a.arrears=0;a.missedFees=0;log(s,a.id,'fee',`${money(due)} operating fee paid.`);}else{a.arrears+=200;a.missedFees++;log(s,a.id,'warning',`Operating fee unpaid (${a.missedFees}/10 days).`);}
     if(a.missedFees>=10){a.active=false;log(s,a.id,'bankrupt','Machine closed after 10 consecutive unpaid fees.');}
     log(s,a.id,'sales',`${Object.values(a.lastSales).reduce((n,x)=>n+x,0)} items sold · ${money(a.lastRevenue)} revenue.`);
   }

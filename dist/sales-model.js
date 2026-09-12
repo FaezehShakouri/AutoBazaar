@@ -92,7 +92,7 @@ export function simulateSales({agents,products,calendar,weather,seed,model=SALES
   if(!(budget===Number.POSITIVE_INFINITY||Number.isInteger(budget)&&budget>=0))throw new Error('Customer budget must be a non-negative integer number of cents.');
   const sold=Object.fromEntries(agents.map(a=>[a.id,Object.fromEntries(products.map(p=>[p.id,0]))]));
   const payments=Object.fromEntries(agents.map(a=>[a.id,Object.fromEntries(products.map(p=>[p.id,0]))]));
-  const reports=[];
+  const reports=[],transactions=[];
   let budgetRemaining=budget,spent=0,closingAdjustment=0;
   const assortment=Object.fromEntries(agents.map(a=>[a.id,products.filter(p=>a.inventory[p.id]>0).length]));
   for(const product of products){
@@ -117,11 +117,13 @@ export function simulateSales({agents,products,calendar,weather,seed,model=SALES
           const payment=Math.min(listed,budgetRemaining);
           sold[winner.id][product.id]++;payments[winner.id][product.id]+=payment;
           spent+=payment;budgetRemaining-=payment;closingAdjustment+=listed-payment;
+          transactions.push({sequence:transactions.length+1,agent:winner.id,product:product.id,listedPrice:listed,payment,discount:listed-payment,budgetAfter:budgetRemaining});
           break;
         }
       }
     }
-    reports.push({product:product.id,expected,noise:prediction.noise,demand:prediction.units,sold:agents.reduce((n,a)=>n+sold[a.id][product.id],0),machines:candidates.map(a=>({...a,sold:sold[a.id][product.id]}))});
+    const unitsSold=agents.reduce((n,a)=>n+sold[a.id][product.id],0);
+    reports.push({product:product.id,expected,noise:prediction.noise,demand:prediction.units,stock,capacityLimited:Math.max(0,prediction.units-stock),walletLimited:Math.max(0,Math.min(stock,prediction.units)-unitsSold),sold:unitsSold,unserved:Math.max(0,prediction.units-unitsSold),machines:candidates.map(a=>({...a,sold:sold[a.id][product.id],revenue:payments[a.id][product.id]}))});
   }
-  return {sold,payments,reports,spent,budgetRemaining,closingAdjustment};
+  return {sold,payments,reports,transactions,spent,budgetRemaining,closingAdjustment};
 }

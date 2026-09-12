@@ -26,11 +26,11 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
         if(path==='/api/reset'&&req.method==='POST'){
           if(busy)return json(res,409,{error:'Wait for the current decision round to finish.'});
           const body=await readBody(req);
-          const fresh=createGame({seed:body.seed,startDate:body.startDate,minimumEntry:body.minimumEntry,mode:'codex'});game=fresh;return json(res,200,game);
+          const fresh=createGame({seed:body.seed,startDate:body.startDate,mode:'codex'});game=fresh;return json(res,200,game);
         }
         if(path==='/api/register'&&req.method==='POST'){
           if(busy)return json(res,409,{error:'Wait for the current operation to finish.'});
-          const body=await readBody(req);game=registerAgent(game,body.id,body.balance);return json(res,200,game);
+          const body=await readBody(req);game=registerAgent(game,body.id);return json(res,200,game);
         }
         if(path==='/api/start'&&req.method==='POST'){
           if(busy)return json(res,409,{error:'Wait for the current operation to finish.'});

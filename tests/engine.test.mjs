@@ -4,12 +4,12 @@ import {createGame,registerAgent,startRound,prepareDay,settleDay,stepDemo,observ
 const hold=()=>({prices:{},load:{},orders:[],rationale:'Wait.',memory:''});
 const decisions=g=>Object.fromEntries(g.agents.map(a=>[a.id,hold()]));
 const ready=(options={})=>{let game=createGame(options);for(const agent of game.agents)game=registerAgent(game,agent.id);return startRound(game);};
-test('lobby requires four registered agents and builds the wallet from their balances',()=>{
+test('lobby requires four agents, transfers their stakes, and keeps starting cash separate',()=>{
   let game=createGame();assert.equal(game.phase,'lobby');assert.throws(()=>prepareDay(game),/start the round/);assert.throws(()=>startRound(game),/4 more/);
-  game=registerAgent(game,'atlas',50000);game=registerAgent(game,'penny',60000);game=registerAgent(game,'nova',70000);
-  assert.equal(game.customerBudgetTotal,180000);assert.throws(()=>startRound(game),/1 more/);assert.throws(()=>registerAgent(game,'sage',49999),/at least/);
-  game=registerAgent(game,'sage',80000);game=startRound(game);
-  assert.equal(game.customerBudgetTotal,260000);assert.deepEqual(game.agents.map(a=>a.cash),[50000,60000,70000,80000]);assert.equal(game.phase,'ready');
+  game=registerAgent(game,'atlas');game=registerAgent(game,'penny');game=registerAgent(game,'nova');
+  assert.equal(game.customerBudgetTotal,150000);assert.throws(()=>startRound(game),/1 more/);
+  game=registerAgent(game,'sage');game=startRound(game);
+  assert.equal(game.customerBudgetTotal,200000);assert.deepEqual(game.agents.map(a=>a.registrationPaid),[50000,50000,50000,50000]);assert.deepEqual(game.agents.map(a=>a.cash),[50000,50000,50000,50000]);assert.equal(game.phase,'ready');
   assert.throws(()=>registerAgent(game,'atlas'),/closed/);
 });
 test('identical seeds reproduce a complete round; accounting and budget remain valid',()=>{
@@ -22,7 +22,7 @@ test('identical seeds reproduce a complete round; accounting and budget remain v
       for(const p of PRODUCTS){assert.ok(agent.inventory[p.id]>=0&&agent.inventory[p.id]<=30);assert.ok(agent.storage[p.id]>=0);}
     }
   }
-  assert.deepEqual(a,b);assert.equal(a.phase,'finished');assert.equal(a.finishReason,'customer_budget_exhausted');assert.equal(a.customerBudgetRemaining,0);assert.equal(a.customerBudgetSpent,a.customerBudgetTotal);assert.equal(totalRevenue(a),a.customerBudgetSpent);assert.equal(a.history.length,a.day+1);
+  assert.deepEqual(a,b);assert.equal(a.phase,'finished');assert.equal(a.finishReason,'customer_budget_exhausted');assert.equal(a.customerBudgetRemaining,0);assert.equal(a.customerBudgetSpent,a.customerBudgetTotal);assert.equal(totalRevenue(a),a.customerBudgetSpent);assert.equal(a.transactionHistory.reduce((sum,item)=>sum+item.payment,0),a.customerBudgetSpent);assert.equal(a.history.length,a.day+1);
   assert.deepEqual(stepDemo(a),a);
   assert.notDeepEqual(a.agents.map(x=>x.cash),[50000,50000,50000,50000]);
 });
@@ -60,5 +60,6 @@ test('daily product demand falls at high prices, with no invented automatic refu
 test('day transition does not mutate caller, and previous product sales are visible',()=>{
   const g=stepDemo(stepDemo(stepDemo(ready()))),copy=structuredClone(g),next=prepareDay(g);
   assert.deepEqual(g,copy);assert.deepEqual(next.agents[0].previousSales,g.agents[0].lastSales);
+  assert.ok(next.daySituation.headline.includes(next.weather));
   assert.throws(()=>prepareDay(next));assert.throws(()=>settleDay(g,{}));
 });

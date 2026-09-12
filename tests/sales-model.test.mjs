@@ -50,6 +50,7 @@ test('competition conserves shared demand and excludes closed, empty and zero-de
 test('finite customer wallet caps payments and reaches exactly zero on the closing purchase',()=>{
   const result=simulateSales({agents:[machine('a',200)],products:[product],calendar,weather:'Mild',seed:42,model:neutral(),budget:450});
   assert.equal(result.sold.a.water,3);assert.equal(result.payments.a.water,450);assert.equal(result.spent,450);assert.equal(result.budgetRemaining,0);assert.equal(result.closingAdjustment,150);
+  assert.deepEqual(result.transactions.map(t=>t.payment),[200,200,50]);assert.equal(result.reports[0].unserved,7);assert.equal(result.reports[0].walletLimited,7);
   assert.equal(simulateSales({agents:[machine('a')],products:[product],calendar,weather:'Mild',seed:42,model:neutral(),budget:0}).sold.a.water,0);
 });
 test('lower-priced competitors gain demand across fixed repeatable samples',()=>{

@@ -3,8 +3,8 @@ import {createGame,registerAgent,startRound,stepDemo,prepareDay,settleDay,observ
 import {codexDecision} from '../lib/codex.mjs';
 const args=process.argv.slice(2),get=(key,fallback)=>{const index=args.indexOf(key);return index<0?fallback:args[index+1];};
 const mode=get('--mode','demo');if(!['demo','codex'].includes(mode))throw new Error('Mode must be demo or codex.');
-let game=createGame({seed:Number(get('--seed',42)),startDate:get('--start-date','2025-01-01'),mode});
-for(const agent of game.agents)game=registerAgent(game,agent.id,Number(get('--balance',500))*100);
+let game=createGame({seed:Number(get('--seed',42)),startDate:get('--start-date','2025-01-01'),registrationStake:Number(get('--stake',500))*100,startingCash:Number(get('--cash',500))*100,mode});
+for(const agent of game.agents)game=registerAgent(game,agent.id);
 game=startRound(game);
 const maxDays=Number(get('--max-days',1000));
 await mkdir('.runs',{recursive:true});
