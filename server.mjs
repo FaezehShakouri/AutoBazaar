@@ -11,9 +11,9 @@ import {createSeasonApi} from './lib/season-api.mjs';
 import {agentBookConfig} from './lib/agentkit-auth.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
-export function createArenaServer({decide=codexDecision,saveDirectory=join(root,'.runs'),seasons,book,bookConfig=agentBookConfig(),publicOrigin}={}){
+export function createArenaServer({decide=codexDecision,saveDirectory=join(root,'.runs'),seasons,book,bookConfig=agentBookConfig(),publicOrigin,worldEnv={}}={}){
   let game=createGame({mode:'codex'}),busy=false;
-  const seasonApi=seasons?createSeasonApi({store:seasons,book,config:bookConfig,origin:publicOrigin}):null;
+  const seasonApi=seasons?createSeasonApi({store:seasons,book,config:bookConfig,origin:publicOrigin,worldEnv}):null;
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   const readBody=async req=>{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw new Error('Request too large.');}return JSON.parse(body||'{}');};
   const server=http.createServer(async(req,res)=>{
@@ -24,7 +24,7 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
     if(!loopback&&(!publicOrigin||host!==new URL(publicOrigin).host))return json(res,403,{error:'Unexpected Host header.'});
     const origin=publicOrigin||`http://${host}`,url=new URL(req.url,origin),path=url.pathname;
     try{
-      if(path==='/api/seasons'||path.startsWith('/api/seasons/')){
+      if(path==='/api/seasons'||path.startsWith('/api/seasons/')||path.startsWith('/api/world-id/')){
         if(!seasonApi)return json(res,503,{error:'Shared seasons are not enabled on this server.'});
         const init={method:req.method,headers:req.headers};
         if(!['GET','HEAD'].includes(req.method)){init.body=Readable.toWeb(req);init.duplex='half';}
@@ -75,10 +75,10 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
         return json(res,404,{error:'Unknown endpoint.'});
       }
       if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'Method not allowed.'});
-      const files=Object.fromEntries(['index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','seasons.html','seasons.js','seasons.css','season-view.js','agent-guide.html','agent.mjs','agent-wallet.mjs','steady-agent.mjs','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']=publicOrigin?'seasons.html':'index.html';files['/seasons']='seasons.html';files['/play']='index.html';
+      const files=Object.fromEntries(['index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','seasons.html','seasons.js','seasons.css','season-view.js','world-id.html','world-id.js','agent-guide.html','agent.mjs','agent-wallet.mjs','steady-agent.mjs','idkit_wasm_bg.wasm','THIRD-PARTY-NOTICES.txt','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']=publicOrigin?'seasons.html':'index.html';files['/seasons']='seasons.html';files['/play']='index.html';files['/world-id']='world-id.html';
       if(!files[path])return json(res,404,{error:'Not found.'});
       const body=await readFile(join(root,'dist',files[path]));
-      res.writeHead(200,{'Content-Type':/\.m?js$/.test(path)?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
+      res.writeHead(200,{'Content-Type':path.endsWith('.wasm')?'application/wasm':/\.m?js$/.test(path)?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
     }catch(e){json(res,400,{error:e.message});}
   });
   if(seasons){const timer=setInterval(()=>{try{seasons.tick();}catch(e){console.error('Season clock:',e.message);}},1000);timer.unref();server.on('close',()=>clearInterval(timer));}
@@ -95,7 +95,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
     if(!['127.0.0.1','localhost','::1'].includes(bindAddress)&&!publicOrigin)throw Error('Set PUBLIC_ORIGIN before binding a public interface.');
     const bookConfig=agentBookConfig(process.env);
     const seasons=new SeasonStore({db:openSeasonDatabase(process.env.SEASON_DB||join(root,'.runs','seasons.sqlite')),bookScope:bookConfig.scope,turnMs:Number(process.env.SEASON_TURN_SECONDS||180)*1000,intermissionMs:Number(process.env.SEASON_INTERMISSION_SECONDS||30)*1000});
-    const server=createArenaServer({seasons,bookConfig,publicOrigin});
+    const server=createArenaServer({seasons,bookConfig,publicOrigin,worldEnv:process.env});
     server.on('close',()=>seasons.close());
     server.on('error',error=>{
       if(error.code==='EADDRINUSE'){
