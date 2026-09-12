@@ -9,9 +9,12 @@ async function fixture(t,decide){const dir=await mkdtemp(join(tmpdir(),'vending-
 test('API commits a complete round, exports state and rejects cross-origin calls',async t=>{
   const {base,post}=await fixture(t,async()=>decision);
   assert.equal((await fetch(base+'/')).status,200);
-  assert.equal((await post('/api/reset',{seed:9,days:30})).status,200);
+  assert.equal((await fetch(base+'/sales-model.js')).status,200);
+  assert.equal((await post('/api/reset',{seed:9,days:30,startDate:'2025-06-01'})).status,200);
   const res=await post('/api/step');assert.equal(res.status,200);assert.equal((await res.json()).day,1);
   assert.equal((await(await fetch(base+'/api/state')).json()).agents[0].memory,'Save.');
+  const state=await(await fetch(base+'/api/state')).json();
+  assert.equal(state.calendar.date,'2025-06-01');assert.equal(state.version,2);assert.equal(state.salesReport.length,6);
   const bad=await fetch(base+'/api/step',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://example.com'},body:'{}'});assert.equal(bad.status,403);
   assert.equal((await post('/api/reset',{seed:-1,days:365})).status,400);
 });

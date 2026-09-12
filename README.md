@@ -19,6 +19,8 @@ The default browser mode uses four explicitly labeled built-in policies. Select 
 
 Install and authenticate the [official Codex CLI](https://developers.openai.com/codex/cli/) before using model mode. Integration follows [non-interactive Codex execution](https://developers.openai.com/codex/noninteractive/) with a JSON output schema. The runner uses `codex exec` directly; it does not require an API key in the browser.
 
+The runner finds Codex on PATH, alongside Node, in common CLI installations, or bundled with the Codex app, Cursor or VS Code extension. This also works when a GUI-launched server has a minimal PATH. `CODEX_BIN` overrides discovery; relative paths resolve from the server's working directory. Restart the server after updating the runner or changing this setting.
+
 ```sh
 codex login
 # Optional: choose a model available to your account
@@ -36,8 +38,8 @@ Decisions have a two-minute timeout. Provider or JSON failures leave the entire 
 ## Experiments
 
 ```sh
-npm run simulate -- --mode demo --seed 42 --days 365
-npm run simulate -- --mode codex --seed 42 --days 30
+npm run simulate -- --mode demo --seed 42 --days 365 --start-date 2025-01-01
+npm run simulate -- --mode codex --seed 42 --days 30 --start-date 2025-01-01
 npm test
 npm run check
 ```
@@ -50,16 +52,17 @@ CLI runs save their state to `.runs/<mode>-<seed>.json` after each day. The serv
 - Six products, 30 units per product in the machine, maximum 240 held/in-transit units per product.
 - Three suppliers trade off price, delivery time and delay risk. Orders of 24+ units earn an 8% unit-price discount.
 - Orders debit cash immediately. Deliveries enter storage on arrival mornings. Agents must explicitly load inventory before it can sell.
-- All prices and ledgers use integer USD cents. Sales settle automatically that day. Refunds remove revenue from cash but do not restore consumed stock.
-- A shared population of visitors chooses a product, then one available machine using price-sensitive weighted choice with an outside option. At most one sale per visitor.
-- Weather, weekly patterns and scheduled market events affect traffic or drink demand. Randomness uses a seeded PRNG.
+- All prices and ledgers use integer USD cents. Sales settle automatically that day (a local simplification of the original cash/card settlement). Automatic random refunds have been removed: the publication does not specify a fixed refund rate.
+- Sales are predicted daily per product following the published price-elasticity, baseline-demand, calendar/weather, variety, noise, rounding and stock-cap pipeline. See [customer model and source mapping](docs/customer-model.md).
+- Actual UTC calendar dates drive weekday and month multipliers. The default start is 2025-01-01 (a local choice); set it in New season or use `--start-date YYYY-MM-DD` in the CLI. Weather/noise streams are independent of supplier orders. No invented festival/closure schedule or visitor population remains.
 - Daily operating rent is $2. Missed rent accumulates as arrears; ten consecutive unpaid days close a machine. Outstanding arrears plus the current fee must be paid to reset the counter.
 
-This first slice simplifies the original benchmark: fixed supplier/product catalogs, automatic cash collection, bulk discounts instead of conversation-based negotiation, no adversarial supplier agents, no inter-agent trade, no inventory spoilage, no model-cost scoring. Codex determines the business actions; the engine alone determines customer purchases and financial state.
+The published model does not include numeric coefficients, cached product triples, noise distribution, exact variety function or Arena allocation equations. These remain explicitly labeled local assumptions in `dist/sales-model.js`, snapshotted into every run. It is not an exact benchmark reproduction. Other simplifications remain: fixed supplier/product catalogs, automatic cash collection, bulk discounts instead of conversation-based negotiation, no adversarial supplier agents, no inter-agent trade, no inventory spoilage, no model-cost scoring. Codex determines the business actions; the engine alone determines customer purchases and financial state.
 
 ## Layout
 
 - `dist/engine.js`: pure shared simulation, observation boundaries, decision validation, and built-in policies.
+- `dist/sales-model.js`: source-linked demand pipeline, versioned local calibration, calendar and competition allocation.
 - `dist/app.js`, `dist/style.css`, `dist/index.html`: browser spectator interface, no framework required.
 - `lib/codex.mjs`: schema, prompts, and local Codex subprocess adapter.
 - `server.mjs`: loopback HTTP API, atomic decision rounds and snapshots.

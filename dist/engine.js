@@ -1,3 +1,4 @@
+import {SALES_MODEL,validateSalesModel,dateForDay,weatherForDay,simulateSales} from './sales-model.js';
 // Shared deterministic engine: browser demo and authoritative local runner.
 export const PRODUCTS = [
   {id:'water',name:'Spring water',icon:'💧',cost:45,retail:150,category:'drink'},
@@ -20,10 +21,12 @@ export const PERSONALITIES = [
 ];
 const quantities = (n=0) => Object.fromEntries(PRODUCTS.map(p=>[p.id,n]));
 export const money = cents => (cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
-export function createGame({seed=42,days=365,mode='demo'}={}) {
+export function createGame({seed=42,days=365,mode='demo',startDate='2025-01-01',salesModel=SALES_MODEL}={}) {
   if(!Number.isInteger(seed)||seed<0||seed>4294967295) throw new Error('Seed must be an unsigned 32-bit integer.');
   if(!Number.isInteger(days)||days<1||days>365) throw new Error('Season must be between 1 and 365 days.');
-  return {version:1,seed,rng:seed||1,day:0,days,mode,phase:'ready',weather:'Mild',customers:0,event:'Opening day',agents:PERSONALITIES.map(a=>({...a,cash:50000,inventory:quantities(),storage:quantities(),prices:Object.fromEntries(PRODUCTS.map(p=>[p.id,p.retail])),orders:[],revenue:0,spending:0,fees:0,refunds:0,sold:0,missedFees:0,arrears:0,active:true,memory:'',rationale:'Ready to open. Choose stock and set prices.',lastSales:quantities(),lastRevenue:0})),history:[{day:0,cash:PERSONALITIES.map(()=>50000)}],log:[],nextLogId:1};
+  const calendar=dateForDay(startDate,0);
+  validateSalesModel(salesModel,PRODUCTS);
+  return {version:2,seed,rng:seed||1,day:0,days,mode,startDate,calendar,salesModel:structuredClone(salesModel),salesReport:[],phase:'ready',weather:'Mild',unitsSoldToday:0,agents:PERSONALITIES.map(a=>({...a,cash:50000,inventory:quantities(),storage:quantities(),prices:Object.fromEntries(PRODUCTS.map(p=>[p.id,p.retail])),orders:[],revenue:0,spending:0,fees:0,refunds:0,sold:0,missedFees:0,arrears:0,active:true,memory:'',rationale:'Ready to open. Choose stock and set prices.',lastSales:quantities(),lastRevenue:0})),history:[{day:0,cash:PERSONALITIES.map(()=>50000)}],log:[],nextLogId:1};
 }
 function random(s){s.rng=(Math.imul(1664525,s.rng)+1013904223)>>>0;return s.rng/4294967296;}
 function log(s,agent,type,text){s.log.push({id:s.nextLogId++,day:s.day,agent,type,text});}
@@ -33,10 +36,11 @@ export function prepareDay(state){
   if(s.phase==='finished') return s;
   if(s.phase==='deciding') throw new Error('This day is already prepared.');
   s.day++;s.phase='deciding';
-  const w=random(s);s.weather=w<.18?'Rainy':w<.43?'Hot':'Mild';
-  s.event=s.day%17===0?'Campus festival':s.day%11===0?'Office closure':'Business as usual';
-  s.customers=Math.round((80+random(s)*40)*(s.day%7>=5?.7:1)*(s.weather==='Rainy'?.7:1)*(s.event==='Campus festival'?1.65:s.event==='Office closure'?.55:1));
-  log(s,null,'market',`${s.weather} weather · ${s.customers} visitors · ${s.event}`);
+  if(s.version!==2)throw new Error('Start a new season to use the updated sales model.');
+  s.calendar=dateForDay(s.startDate,s.day);
+  s.weather=weatherForDay(s.seed,s.calendar.date,s.salesModel);
+  s.unitsSoldToday=0;s.salesReport=[];
+  log(s,null,'market',`${s.calendar.date} · ${s.weather} · daily product demand model`);
   for(const a of s.agents){
     if(!a.active)continue;
     a.previousSales={...a.lastSales};a.previousRevenue=a.lastRevenue;
@@ -48,7 +52,7 @@ export function prepareDay(state){
 }
 export function observation(s,id){
   const self=s.agents.find(a=>a.id===id);if(!self)throw new Error('Unknown agent');
-  return structuredClone({day:s.day,days:s.days,weather:s.weather,event:s.event,visitors:s.customers,self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer USD cents',startingCash:50000,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Final bank cash; stock has no liquidation value',settlement:'Orders paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales settle automatically that day. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt or real purchases.',customerChoice:'Shared visitors choose among available machines by price relative to product reference retail, with random preferences; visitors may walk away.'}});
+  return structuredClone({day:s.day,days:s.days,weather:s.weather,date:s.calendar.date,self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer USD cents',startingCash:50000,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Final bank cash; stock has no liquidation value',settlement:'Orders paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales settle automatically that day. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt or real purchases.',customerChoice:'Daily product demand uses price elasticity against a reference price, baseline sales, weekday, month, weather, assortment variety, noise and inventory caps. Competing machines share per-product demand weighted by their standalone expected sales. This follows the public paper structure with local calibration and a local Arena allocation rule.'}});
 }
 export function validateDecision(d){
   if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Decision must be an object.');
@@ -83,18 +87,13 @@ export function settleDay(state,decisions){
       a.orders.push({...o,arrives,total});log(s,a.id,'order',`Ordered ${o.quantity} ${p.name} for ${money(total)} · day ${arrives}${delayed?' (delayed)':''}.`);
     }
   }
-  for(let i=0;i<s.customers;i++){
-    const drink=random(s)<(s.weather==='Hot'?.78:.52);
-    const group=PRODUCTS.filter(p=>p.category===(drink?'drink':'snack'));
-    const p=group[Math.floor(random(s)*group.length)];
-    const available=s.agents.filter(a=>a.active&&a.inventory[p.id]>0);
-    const weights=available.map(a=>Math.exp(-2.7*(a.prices[p.id]/p.retail-1)));
-    let ticket=random(s)*(weights.reduce((n,w)=>n+w,0)+.75);
-    for(let j=0;j<available.length;j++){
-      ticket-=weights[j];if(ticket>0)continue;
-      const a=available[j];a.inventory[p.id]--;a.sold++;a.lastSales[p.id]++;
-      a.cash+=a.prices[p.id];a.revenue+=a.prices[p.id];a.lastRevenue+=a.prices[p.id];
-      if(random(s)<.012){a.cash-=a.prices[p.id];a.refunds+=a.prices[p.id];log(s,a.id,'refund',`Customer refunded ${money(a.prices[p.id])} for ${p.name}.`);}break;
+  const sales=simulateSales({agents:s.agents,products:PRODUCTS,calendar:s.calendar,weather:s.weather,seed:s.seed,model:s.salesModel});
+  s.salesReport=sales.reports;
+  for(const a of s.agents){
+    for(const p of PRODUCTS){
+      const units=sales.sold[a.id][p.id],revenue=units*a.prices[p.id];
+      a.inventory[p.id]-=units;a.sold+=units;a.lastSales[p.id]=units;
+      a.cash+=revenue;a.revenue+=revenue;a.lastRevenue+=revenue;s.unitsSoldToday+=units;
     }
   }
   for(const a of s.agents){

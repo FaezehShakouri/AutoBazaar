@@ -24,12 +24,12 @@ test('ordering pays immediately, arrival enters storage, loading is explicit and
   assert.equal(a.inventory.water,0);assert.equal(a.storage.water,0);assert.equal(a.cash,50000-a.spending-200);
   while(g.day<arrival-1){g=prepareDay(g);g=settleDay(g,decisions(g));}
   g=prepareDay(g);assert.equal(g.agents[0].storage.water,40);assert.equal(g.agents[0].inventory.water,0);
-  g.customers=0;const load=decisions(g);load.atlas.load={water:30};g=settleDay(g,load);
+  g.agents[0].prices.water=2000;const load=decisions(g);load.atlas.load={water:30};g=settleDay(g,load);
   assert.equal(g.agents[0].inventory.water,30);assert.equal(g.agents[0].storage.water,10);
 });
 test('invalid decisions cannot mint money or stock',()=>{
   for(const bad of [{...hold(),prices:{water:-5}},{...hold(),load:{water:31}},{...hold(),orders:[{product:'water',supplier:'express',quantity:-1}]},{...hold(),prices:{unknown:100}},{...hold(),load:{water:NaN}}])assert.throws(()=>validateDecision(bad));
-  const g=prepareDay(createGame());g.customers=0;const d=decisions(g);d.atlas.load={water:30};d.atlas.orders=Array(12).fill({product:'coffee',supplier:'express',quantity:120});
+  const g=prepareDay(createGame());const d=decisions(g);d.atlas.load={water:30};d.atlas.orders=Array(12).fill({product:'coffee',supplier:'express',quantity:120});
   const out=settleDay(g,d);assert.equal(out.agents[0].inventory.water,0);assert.ok(out.agents[0].cash>=0);assert.ok(out.agents[0].orders.reduce((n,o)=>n+o.quantity,0)<=240);
 });
 test('private observations exclude opponents finances, notes, RNG and inventories',()=>{
@@ -42,10 +42,10 @@ test('ten consecutive unpaid fees eliminate an agent; arrears are retained',()=>
   for(let i=0;i<10;i++){g=prepareDay(g);g=settleDay(g,decisions(g));}
   assert.equal(g.agents[0].active,false);assert.equal(g.agents[0].arrears,2000);
 });
-test('one shared visitor can buy at most one item; high prices reduce demand',()=>{
-  const run=price=>{const g=prepareDay(createGame());g.customers=100;for(const a of g.agents)for(const p of PRODUCTS){a.inventory[p.id]=30;a.prices[p.id]=price;}return settleDay(g,decisions(g));};
+test('daily product demand falls at high prices, with no invented automatic refunds',()=>{
+  const run=price=>{const g=prepareDay(createGame());for(const a of g.agents)for(const p of PRODUCTS){a.inventory[p.id]=30;a.prices[p.id]=price;}return settleDay(g,decisions(g));};
   const cheap=run(100),expensive=run(2000),sales=g=>g.agents.reduce((n,a)=>n+a.sold,0);
-  assert.ok(sales(cheap)<=100);assert.ok(sales(cheap)>sales(expensive));
+  assert.ok(sales(cheap)>sales(expensive));assert.equal(sales(expensive),0);assert.ok(cheap.agents.every(a=>a.refunds===0));assert.equal(cheap.unitsSoldToday,sales(cheap));
 });
 test('day transition does not mutate caller, and previous product sales are visible',()=>{
   const g=stepDemo(stepDemo(stepDemo(createGame()))),copy=structuredClone(g),next=prepareDay(g);
