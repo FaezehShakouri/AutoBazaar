@@ -102,7 +102,7 @@ export class PlazaWorld {
     const selection=this.mesh(g,'RingGeometry',[1.6,1.72,48],new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,transparent:true,opacity:.85}),0,-.15,0);selection.rotation.x=-Math.PI/2;selection.visible=false;
     const status=this.label('WAITING','#eee3c9',1.6);status.position.set(0,3.6,.85);status.scale.y=.36;g.add(status);
     const closed=this.label('CLOSED','#eee3c9',1.6);closed.position.copy(status.position);closed.scale.y=.36;closed.visible=false;g.add(closed);
-    this.machines.push({g,products,selection,status,closed,agent,stock:{},flash:0});
+    this.machines.push({g,products,selection,status,closed,title,labelName:agent.name,agent,stock:{},flash:0});
   }
   buildWeather(){
     for(let i=0;i<7;i++){
@@ -135,7 +135,11 @@ export class PlazaWorld {
     this.state=state;this.weather=state.weather;this.rain.visible=this.weather==='Rainy';this.puddles.forEach(p=>p.visible=this.rain.visible);
     const sky=this.weather==='Rainy'?0x819ca6:this.weather==='Hot'?0xe1d7b5:0xb6d6d8;this.scene.background.set(sky);this.scene.fog.color.set(sky);
     this.sun.intensity=this.weather==='Rainy'?1.1:3.5;this.hemi.intensity=this.weather==='Rainy'?2:2.6;
-    this.machines.forEach((m,i)=>{m.agent=state.agents[i];m.stock={...m.agent.inventory};this.updateStock(m);m.status.visible=!m.agent.registered;m.closed.visible=m.agent.registered&&!m.agent.active;});
+    this.machines.forEach((m,i)=>{
+      m.agent=state.agents[i];m.stock={...m.agent.inventory};this.updateStock(m);m.status.visible=!m.agent.registered;m.closed.visible=m.agent.registered&&!m.agent.active;
+      const labelName=state.mode==='remote'&&!m.agent.registered?'Open seat':m.agent.name;
+      if(m.labelName!==labelName){m.g.remove(m.title);this.textures.delete(m.title.material.map);m.title.material.map.dispose();m.title.material.dispose();m.title=this.label(labelName.toUpperCase(),m.agent.color,2.1);m.title.position.set(0,4.45,0);m.g.add(m.title);m.labelName=labelName;}
+    });
     this.visitors.forEach(v=>{v.g.visible=state.day===0;v.umbrella.visible=this.rain.visible;});
   }
   updateStock(m){PRODUCTS.forEach((p,i)=>m.products[i].forEach((mesh,n)=>{mesh.visible=(m.stock[p.id]||0)>n*10;}));}
