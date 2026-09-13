@@ -1,10 +1,10 @@
 # Human-backed seasons
 
-AutoBazaar is the World Developer Portal app for Vending Plaza. The game has two independent modes: local practice, and persistent seasons whose agents connect from their own computers.
+Autobazar uses the existing AutoBazaar World Developer Portal app. The game has two independent modes: local practice, and persistent seasons whose agents connect from their own computers.
 
 ## Contract
 
-Four different human-backed wallets fill a season. Each receives $1,000 of simulated entry capital: $500 funds the customer wallet and $500 becomes operating cash. The fourth entry automatically opens the plaza, and a new lobby becomes available. No cryptocurrency transfers occur.
+Competition uses four different human-backed wallets. The explicitly configured [hackathon demo](hackathon-demo.md) uses one human-backed wallet plus three house wallets. Each supplies 1.00 test USDC of entry capital: 0.50 test USDC funds the customer wallet and 0.50 test USDC becomes operating cash. The fourth entry automatically opens the plaza, and a new lobby becomes available. Arc-configured seasons require actual test-USDC deposits and settle onchain; unconfigured local servers simulate the same amounts. See [Arc payments](arc-payments.md) for the funded protocol.
 
 Each server morning gives all active machines the same frozen observation boundary. Decisions lock once. All active submissions, or the server deadline, settle the day. Missing agents retain prices and private memory but place no orders or restocks. An intermission precedes the next decision window. Browser pause/replay never pauses the season clock. A season ends when the customer wallet is spent or all machines close. Final bank cash determines rankings; equal balances share a rank.
 
@@ -12,13 +12,15 @@ Each server morning gives all active machines the same frozen observation bounda
 
 The implementation uses `@worldcoin/agentkit` 0.2.1. The client calls `createAgentkitClient().fetch`. An unsigned protected request receives an HTTP 402 response with an AgentKit extension in free mode and no payment alternatives. The client signs and retries with the `agentkit` header.
 
-The server uses the SDK's challenge generation, parsing, message validation, SIWE formatting, smart-wallet verification and AgentBook verifier. EOA signatures are verified locally with viem. Challenges additionally bind the exact URL, HTTP method and SHA-256 of the request body. Stored challenge fields must match, expiration is enforced, and an atomic database update consumes each nonce once. AgentBook is resolved on every protected request. RPC outages return 503; they do not grant access or become demo identities.
+The server uses the SDK's challenge generation, parsing, message validation, SIWE formatting and AgentBook verifier. Deployed Arc smart wallets use a direct EIP-1271 call; other supported smart wallets use the SDK verifier. EOA signatures are verified locally with viem. In Arc seasons, Circle smart-wallet EIP-1271 signatures are verified on Arc; the canonical AgentBook ownership lookup remains on World Chain. Challenges additionally bind the exact URL, HTTP method and SHA-256 of the request body. Stored challenge fields must match, expiration is enforced, and an atomic database update consumes each nonce once. AgentBook is resolved on every protected human request. In explicit demo mode, exactly three allowlisted house wallets can skip human lookup after signature verification; they are labeled as house agents and still sign all financial permissions. RPC outages return 503; they do not grant access or become demo identities.
 
 Production resolves World Chain (chain 480), contract `0xA23aB2712eA7BBa896930544C7d6636a96b944dA`. Signing keys stay on the agent computer. Raw human identifiers are not saved: the server derives a season-scoped HMAC using a private persistent salt. Unique database constraints enforce one wallet and one human per season. Re-registering a wallet to a different human removes its authorization for an existing seat.
 
 References: [World integration guide](https://docs.world.org/agents/agent-kit/integrate), [SDK reference](https://docs.world.org/agents/agent-kit/sdk-reference), [AgentKit source](https://github.com/worldcoin/agentkit).
 
 ## Run an agent
+
+The guide leads with a copyable Codex setup prompt, served from `/agent-setup.txt`. It discovers current rules and escrow, creates or reuses a Circle testnet wallet, reuses existing seats, handles official World registration, and opens the local dashboard in Review mode after one approved entry. It does not authorize automatic daily submissions or future season entries. Required consent, login codes and World verification remain human handoffs.
 
 Players can download a standalone runner, wallet helper and example policy from `/agent-guide.html` on the deployed game. A repository checkout is not required. The build bundles the local protocol/Codex adapters and leaves the pinned AgentKit/viem packages as installable dependencies. Private configuration files are never included.
 
@@ -27,10 +29,12 @@ npm ci
 npm run agent:wallet
 npx @worldcoin/agentkit-cli@0.2.0 register YOUR_AGENT_ADDRESS
 npx @worldcoin/agentkit-cli@0.2.0 status YOUR_AGENT_ADDRESS
-npm run agent -- --server https://YOUR_GAME --name MyAgent --codex
+npm run agent -- --server https://YOUR_GAME --name MyAgent --codex --arc-contract REVIEWED_ESCROW_ADDRESS
 ```
 
 `agent:wallet` creates `.agent.env` with owner-only permissions and refuses to overwrite it. Back up that file privately. Do not put keys in command arguments, the browser, Git, or an agent's policy prompt. `--codex` uses your locally authenticated Codex CLI. `--policy ./examples/steady-agent.mjs` illustrates using your own JavaScript strategy, which can call another model. Policies export `async function decide(observation)` and return the engine's decision object. Code in a custom policy has the permissions of the agent process; only run policies you trust.
+
+Use `--join-only --season N --name MyAgent` to confirm one entry and exit without generating or submitting decisions. This mode requires an explicit season and rejects `--follow`, `--codex`, `--policy` and `--withdraw`. It is safe to resume the same confirmed seat; the server does not fund it twice. Then run the [owner dashboard](agent-dashboard.md).
 
 The default is the oldest open season. `--season N` chooses explicitly; `--follow` enters the next available season after finishing. A runner cannot create four seats with one verified human. Four distinct human identities are required for production competition.
 
@@ -40,11 +44,13 @@ The default is the oldest open season. `--season N` chooses explicitly; `--follo
 | --- | --- | --- |
 | `GET /api/seasons` | Public | Latest 100 seasons, rules, verification environment |
 | `GET /api/seasons/:id/snapshot` | Public | Settled simulation, public events/receipts, current deadline and submitted slots |
-| `POST /api/seasons/:id/join` | AgentKit | Body `{name, strategy?}`; returns assigned slot |
+| `POST /api/seasons/:id/join` | AgentKit | Body `{name, strategy?}`; returns funding ticket, pending transaction, then confirmed slot on Arc; immediate slot in practice |
+| `POST /api/seasons/:id/house-agents` | AgentKit | Human seat requests demo rivals; authenticated house host claims/renews an expiring lease and reports status |
+| `POST /api/seasons/:id/withdraw` | AgentKit seat owner | Queues a fixed-recipient payout after completion |
 | `GET /api/seasons/:id/observation` | AgentKit seat owner | `{season, slot, submitted, observation}`; null observation during lobby/intermission |
-| `POST /api/seasons/:id/decisions` | AgentKit seat owner | Body `{day, decision}`; locks once, identical retries are idempotent |
+| `POST /api/seasons/:id/decisions` | AgentKit seat owner | Body `{day, decision, authorization}` for Arc (EIP-712 Day signature); `{day, decision}` in practice; locks once, identical retries are idempotent |
 
-Decision shape (money in integer cents):
+Decision shape (money in integer game units (100000 = 1 USDC)):
 
 ```json
 {"day":1,"decision":{"prices":{"water":150},"load":{"water":20},"orders":[],"rationale":"Maintain a cash reserve.","memory":"My private notebook."}}
@@ -73,18 +79,32 @@ Optional RPC credentials belong in `wrangler secret put WORLDCHAIN_RPC_URL`. Loc
 
 For a conventional Node host, use a persistent `SEASON_DB` volume, `BIND_ADDRESS=0.0.0.0`, and `PUBLIC_ORIGIN=https://YOUR_GAME` behind HTTPS. That disables local runner APIs and pins signed URLs to the configured origin. The default loopback server retains local practice at `/`, and shared seasons at `/seasons`.
 
-## Android Sandbox test
+## Sandbox diagnostics and retired enrollment
 
-`/world-id` performs an explicit Sandbox phone-to-backend test for an agent wallet address. Configure `WORLD_ID_APP_ID`, `WORLD_ID_RP_ID`, `WORLD_ID_SIGNING_KEY` and optionally `WORLD_ID_ACTION`. The private RP key signs requests on the backend. The browser uses IDKit 4.2.4, `environment: sandbox`, and the supported `proofOfHuman` preset bound to the wallet and a random expiring session. It accepts v4 Proof of Human or the preset's legacy v3 Orb response. Device, Selfie and document credentials are not treated as Proof of Human. The backend pins environment, action, nonce, credential and signal hash, then forwards the complete unchanged result to World's verify endpoint and requires success for that exact credential. It records only a salted identifier and completion time, not the proof payload. Replays and expired sessions fail. A failed backend check can be retried while the session remains valid; the browser holds the response only in page memory and clears it on completion, a new request, or leaving the page.
+Game entry uses `SEASON_IDENTITY_MODE=agentbook`. The former app-specific Sandbox registry and Selfie enrollment are retired. `/api/world-id/enroll`, `/api/world-id/status` and old enrollment-session URLs return HTTP 410 with official AgentBook instructions. `/world-id` redirects to the agent registration guide. The old runner flag `--register-sandbox` fails before signing or spending.
 
-For remote testing without an Orb, set `WORLD_ID_SANDBOX_CREDENTIAL=selfie` after World enables Selfie Check Beta for the app. This requests the documented `selfieCheckLegacy` preset and verifies only its `selfie` response, with the same wallet/session binding and upstream verification. The credential choice is stored per request, so changing configuration cannot change what an existing request authorizes. Selfie Check does not establish strict one-person-one-account uniqueness; the page labels it as a separate Sandbox test and it never grants a season seat. The default `proof_of_human` mode requires an Orb-backed credential. See [Selfie Check access](https://docs.world.org/world-id/credentials/11) and [Sandbox testing](https://docs.world.org/world-id/sandbox/testing-selfie-check).
+An isolated phone diagnostic remains at `/world-id-diagnostic`, using `WORLD_ID_APP_ID`, `WORLD_ID_RP_ID`, `WORLD_ID_SIGNING_KEY`, `WORLD_ID_ACTION` and `WORLD_ID_SANDBOX_CREDENTIAL`. It checks environment, action, nonce, credential, wallet signal, upstream verification, expiry and replay. It never writes an AgentBook registration or grants a game seat. Previously issued enrollment proofs cannot be completed after retirement; old registry rows are not used for authorization.
 
-On Cloudflare, install the signing key with `wrangler secret put WORLD_ID_SIGNING_KEY`; put the app ID, RP ID and action in Worker vars. The page stays unavailable until configured. AutoBazaar's Selfie Check Sandbox access was confirmed on 2026-09-12 by a real Android 1.0.500 phone proof accepted by World's verify API. The checked-in Worker configuration selects this no-Orb test mode.
+The published AgentKit CLI 0.2.0 registers through its own legacy World App bridge and canonical World Chain AgentBook. It exposes no Sandbox flag. The hackathon's remote Sandbox testing requirement still needs a World-supported compatible registration flow. A successful Sandbox Selfie Check is not evidence of AgentBook registration. See [World feedback](world-feedback.md) for observed phone behavior and the unresolved compatibility question.
 
-**This test never creates production AgentBook registration or a season seat.** As inspected on 2026-09-12, published AgentKit CLI 0.2.0 hard-codes its own World App registration flow and World Chain deployment, with no Sandbox environment flag. A Sandbox-compatible AgentBook flow still needs World-provided instructions/deployment. `AGENTBOOK_ENVIRONMENT=sandbox` deliberately requires an explicit contract, chain and RPC, and a separate database scope. There is no fake-proof or payment bypass.
+## Preserving funded seasons
 
-References: [Sandbox access and environment](https://docs.world.org/world-id/sandbox/sandbox-access), [IDKit integration](https://docs.world.org/world-id/idkit/integrate), [proof verification API](https://docs.world.org/api-reference/developer-portal/verify).
+Identity scope is pinned in the database. The explicit `MIGRATE_EMPTY_SANDBOX_TO_AGENTBOOK=true` deployment setting can retire a legacy `world-id-sandbox:` scope only when there are zero entrants and zero payment jobs across the database, and only into canonical production AgentBook. It invalidates outstanding challenges; old Sandbox proofs are not reused. Any funded/pending season or another scope change rejects migration and requires a separate escrow/database.
+
+The current escrow remains `0xafe55c6fd095848151f0e6fd4fdf70182df4005f`, whose historical deployment filename is `contracts/deployments/arc-testnet-sandbox.json`. It was empty before retirement. No new escrow, wallet, or test deposit is needed for this authorization change. The older funded escrow `0x1bf339645ed45b7662c0f0853a5fd991583f4c39` and its data remain untouched. Do not run a second funded coordinator against the hosted escrow.
 
 ## Validation boundaries
 
-The automated suite covers real AgentKit SDK clients and real wallet signatures with a test-only AgentBook resolver, concurrent/replayed requests, human uniqueness, hidden decisions, restart persistence, deadlines, full-season accounting, and hostile/expired Sandbox payloads with a stubbed upstream verifier. These fixtures do not establish real World identity verification. Deployment and phone-proof results must be recorded separately in the feedback document.
+Tests use real AgentKit SDK clients and real wallet signatures with a test-only AgentBook resolver. They cover one-human-per-season enforcement, request binding, replay, revocation, unavailable AgentBook, rejected unregistered wallets before funding, and refusal to use old Sandbox records. Separate tests cover diagnostic proofs using a stubbed upstream verifier and refusal to migrate funded identity scopes. These fixtures do not establish real World identity verification or four live human players.
+
+Cloudflare deployment recovery and version verification are documented in [deployment notes](cloudflare-deployment.md). A deploy dry run alone is not evidence that the public server changed.
+
+## Live verification — 2026-09-13
+
+Cloudflare release `306e705b-27b7-4bd2-a560-e0ed1374e2db` was deployed through normal Wrangler and confirmed at the public health endpoint. The public API reports canonical AgentBook, one human per season, and the existing Arc escrow. Old enrollment requests return 410; the old QR page redirects to the official setup guide, also verified in the browser.
+
+The existing Circle testnet wallet's real ERC-1271 signature passed on the hosted server. Canonical AgentBook reported that wallet unregistered, and the join request correctly returned 403 before any funding ticket or deposit. The check disabled approvals and financial signing. The lobby remained 0/4 with zero pending entries. Pre-deployment onchain checks confirmed zero escrow liabilities and zero allowance from that wallet.
+
+All 51 application tests pass. The local EVM integration test also passed a complete 21-day season with 859 purchase events, payout and balance reconciliation. These financial and fixture tests do not claim a successful live human registration.
+
+The hosted one-human demo and its guarded conversion of a single waiting human lobby are documented in [hackathon demo](hackathon-demo.md). These house agents do not claim additional World IDs.

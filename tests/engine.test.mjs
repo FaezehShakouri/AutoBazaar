@@ -1,9 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,registerAgent,startRound,prepareDay,settleDay,stepDemo,observation,validateDecision,PRODUCTS} from '../dist/engine.js';
+import {createGame,registerAgent,startRound,prepareDay,settleDay,stepDemo,observation,validateDecision,PRODUCTS,SUPPLIERS,quote} from '../dist/engine.js';
 const hold=()=>({prices:{},load:{},orders:[],rationale:'Wait.',memory:''});
 const decisions=g=>Object.fromEntries(g.agents.map(a=>[a.id,hold()]));
 const ready=(options={})=>{let game=createGame(options);for(const agent of game.agents)game=registerAgent(game,agent.id);return startRound(game);};
+test('every catalog quote and quantity agrees with integer escrow pricing, including exact half units',()=>{
+  const multipliers=[115n,100n,82n];
+  for(const p of PRODUCTS)for(const [i,s] of SUPPLIERS.entries())for(let q=1;q<=120;q++){
+    const scaled=BigInt(p.cost)*multipliers[i]*(q>=24?92n:100n),expected=Number((scaled+5000n)/10000n);
+    assert.equal(quote(p,s,q),expected,`${p.id}/${s.id}/${q}`);
+  }
+  assert.equal(quote(PRODUCTS[5],SUPPLIERS[0],9),104);
+  assert.equal(quote(PRODUCTS[5],SUPPLIERS[0],24),95);
+});
+test('settlement skips orders outside signed limits without creating payments or deliveries',()=>{
+  const g=prepareDay(ready()),d=decisions(g);d.atlas.orders=[{product:'cola',supplier:'express',quantity:13},{product:'nuts',supplier:'express',quantity:9}];
+  const before=structuredClone(g),limits={atlas:1980,penny:0,nova:0,sage:0},out=settleDay(g,d,{supplyLimits:limits});
+  assert.deepEqual(g,before);assert.equal(out.agents[0].spending,1053);assert.equal(out.agents[0].cash,50000-1053-200);
+  assert.equal(out.supplierPayments.length,1);assert.equal(out.agents[0].orders.length,1);assert.equal(out.agents[0].orders[0].product,'cola');
+  assert.match(out.log.find(e=>e.type==='rejected').text,/signed supplier limit/);
+  assert.throws(()=>settleDay(g,d,{supplyLimits:{atlas:-1}}),/Invalid signed/);
+});
 test('lobby requires four agents, transfers their stakes, and keeps starting cash separate',()=>{
   let game=createGame();assert.equal(game.phase,'lobby');assert.throws(()=>prepareDay(game),/start the round/);assert.throws(()=>startRound(game),/4 more/);
   game=registerAgent(game,'atlas');game=registerAgent(game,'penny');game=registerAgent(game,'nova');

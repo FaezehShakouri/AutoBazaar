@@ -11,6 +11,10 @@ import {createRemoteAgent} from '../lib/remote-agent.mjs';
 import {createAgentkitClient} from '@worldcoin/agentkit';
 import {privateKeyToAccount} from 'viem/accounts';
 import {decide} from '../examples/steady-agent.mjs';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+
+const runFile=promisify(execFile);
 
 const config=agentBookConfig();
 // Public, deterministic test wallets only. The deployed server has no mock mode.
@@ -120,4 +124,41 @@ test('public hosting cannot launch local Codex or reset games; cross-origin and 
 test('production cannot silently switch to a custom or unconfigured sandbox AgentBook',()=>{
   assert.throws(()=>agentBookConfig({AGENTBOOK_CHAIN_ID:'8453'}),/canonical/);
   assert.throws(()=>agentBookConfig({AGENTBOOK_ENVIRONMENT:'sandbox'}),/Sandbox needs/);
+});
+
+for(const runner of ['scripts/remote-agent.mjs','dist/agent.mjs'])test(`${runner}: join-only confirms one seat without playing and safely resumes`,async t=>{
+  const {store,base,agents}=await fixture(t);
+  for(let i=0;i<3;i++)await agents[i].join(1,profile(i));
+  const args=[runner,'--server',base,'--name','Setup Agent','--season','1','--join-only'];
+  const options={timeout:20000,env:{...process.env,AGENT_PRIVATE_KEY:keys[3],AGENT_CHAIN_ID:'480',CODEX_BIN:'/missing-codex-for-join-only-test'}};
+  const first=await runFile(process.execPath,args,options);
+  assert.match(first.stdout,/Entry confirmed\. No decisions submitted/);
+  assert.equal(store.summary(store.get(1)).status,'running');
+  assert.equal(store.entries(1).length,4);
+  assert.equal(store.observe(1,identity(3)).submitted,false);
+  assert.equal(store.entries(2).length,0);
+  const retry=await runFile(process.execPath,args,options);
+  assert.match(retry.stdout,/Entry confirmed/);
+  assert.equal(store.get(1).state.customerBudgetTotal,200000);
+  assert.equal(store.observe(1,identity(3)).submitted,false);
+  assert.equal(store.entries(2).length,0);
+});
+
+test('join-only rejects ambiguous seasons and playing flags before any network request',async()=>{
+  const base=['scripts/remote-agent.mjs','--server','https://unreachable.invalid','--name','Setup Agent','--join-only'];
+  for(const flags of [[],['--season','1','--follow'],['--season','1','--withdraw'],['--season','1','--codex'],['--season','1','--policy','./missing.mjs']]){
+    await assert.rejects(runFile(process.execPath,[...base,...flags],{timeout:5000}),e=>e.code===1&&/--join-only requires --season/.test(e.stderr));
+  }
+  for(const season of ['0','-1','1.5','9007199254740993']){
+    await assert.rejects(runFile(process.execPath,[...base,`--season=${season}`],{timeout:5000}),e=>e.code===1&&/positive safe integer/.test(e.stderr));
+  }
+});
+
+test('standalone setup prompt and every dashboard download are served with usable content types',async t=>{
+  const {base}=await fixture(t);
+  for(const [file,type] of [['agent-guide.html','text/html'],['agent-guide.js','text/javascript'],['agent-guide.css','text/css'],['agent-setup.txt','text/plain'],['agent.mjs','text/javascript'],['agent-wallet.mjs','text/javascript'],['steady-agent.mjs','text/javascript'],['agent-dashboard.mjs','text/javascript'],['agent-dashboard.html','text/html'],['agent-dashboard.css','text/css'],['agent-dashboard.js','text/javascript']]){
+    const response=await fetch(`${base}/${file}`);
+    assert.equal(response.status,200,file);assert.equal(response.headers.get('content-type'),type,file);
+    assert.ok((await response.text()).length>100,file);
+  }
 });

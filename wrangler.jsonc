@@ -4,8 +4,11 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
+  "version_metadata": {"binding": "CF_VERSION_METADATA"},
   "assets": {"directory": "dist", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none"},
   "durable_objects": {"bindings": [{"name": "SEASONS", "class_name": "SeasonCoordinator"}]},
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["SeasonCoordinator"]}],
-  "vars": {"AGENTBOOK_ENVIRONMENT": "production", "SEASON_TURN_SECONDS": "180", "SEASON_INTERMISSION_SECONDS": "30", "WORLD_ID_APP_ID": "app_6e99de3a3deb9fb94052168f840cdfcb", "WORLD_ID_RP_ID": "rp_c3a1db611b04d007", "WORLD_ID_ACTION": "autobazaar-agent-test", "WORLD_ID_SANDBOX_CREDENTIAL": "selfie"}
+  // One verified entrant plus three explicitly labeled demo house wallets.
+  // The previous AgentBook escrow and its stored season remain untouched.
+  "vars": {"SEASON_IDENTITY_MODE": "agentbook", "SEASON_MODE": "demo", "DEMO_AGENT_ADDRESSES": "0x18AE11CF42b3Ae9EA22F959Db5D6C82ae3BA5147,0xE7EE86c313FFd3D2673Bbe2AaD1c5B458A6aC3dc,0x45443a7E4da152CFf61f683983ae6B83fF313db7", "ALLOW_SINGLE_HUMAN_DEMO_MIGRATION": "true", "MIGRATE_EMPTY_SANDBOX_TO_AGENTBOOK": "true", "ARC_CONTRACT_ADDRESS": "0xafe55c6fd095848151f0e6fd4fdf70182df4005f", "ARC_MAX_GAS_USDC": "0.50", "AGENTBOOK_ENVIRONMENT": "production", "SEASON_TURN_SECONDS": "180", "SEASON_INTERMISSION_SECONDS": "30", "WORLD_ID_APP_ID": "app_6e99de3a3deb9fb94052168f840cdfcb", "WORLD_ID_RP_ID": "rp_c3a1db611b04d007", "WORLD_ID_ACTION": "autobazaar-agent-test", "WORLD_ID_SANDBOX_CREDENTIAL": "proof_of_human"}
 }

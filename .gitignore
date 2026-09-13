@@ -3,6 +3,8 @@ node_modules/
 .env.*
 !.env.example
 .agent.env
+.arc.env
+.arc-wallets.json
 .dev.vars
 .wrangler/
 .worker-build/
@@ -10,3 +12,5 @@ node_modules/
 .DS_Store
 *.tgz
 .openai
+
+.demo-wallets.json

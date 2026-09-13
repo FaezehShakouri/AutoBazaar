@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.mjs",
-    "dev": "node --env-file-if-exists=.env server.mjs",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.arc.env server.mjs",
+    "dev": "node --env-file-if-exists=.env --env-file-if-exists=.arc.env server.mjs",
     "build": "node scripts/vendor.mjs",
     "test": "node --test tests/*.test.mjs",
     "simulate": "node scripts/simulate.mjs",
@@ -14,7 +14,16 @@
     "cloud:dev": "wrangler dev",
     "cloud:check": "wrangler deploy --dry-run --outdir .worker-build",
     "cloud:deploy": "wrangler deploy",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "contracts:build": "node scripts/compile-contracts.mjs",
+    "test:arc": "node scripts/compile-contracts.mjs && node --test tests/arc-integration.mjs",
+    "arc:setup": "node scripts/setup-arc.mjs",
+    "arc:deploy": "node --env-file-if-exists=.arc.env scripts/deploy-arc.mjs",
+    "demo:setup": "node scripts/setup-demo.mjs",
+    "demo:agents": "node scripts/demo-agents.mjs",
+    "demo:host": "node scripts/demo-agent-host.mjs",
+    "demo:fund": "node --env-file-if-exists=.arc.env scripts/fund-demo.mjs",
+    "agent:dashboard": "node --env-file-if-exists=.agent.env scripts/agent-dashboard.mjs"
   },
   "engines": {
     "node": ">=24"
@@ -27,7 +36,23 @@
     "viem": "2.56.3"
   },
   "devDependencies": {
+    "@circle-fin/cli": "1.0.0",
+    "@openzeppelin/contracts": "5.6.1",
     "esbuild": "0.28.2",
+    "solc": "0.8.30",
     "wrangler": "4.131.1"
+  },
+  "overrides": {
+    "@circle-fin/cli": {
+      "viem": {
+        "ws": "8.21.0"
+      }
+    },
+    "solc": {
+      "tmp": "0.2.7"
+    },
+    "@coral-xyz/anchor": {
+      "toml": "4.2.0"
+    }
   }
 }

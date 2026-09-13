@@ -23,11 +23,16 @@ export const REQUIRED_AGENTS = 4;
 export const REGISTRATION_STAKE = 50000;
 export const STARTING_CASH = 50000;
 const quantities = (n=0) => Object.fromEntries(PRODUCTS.map(p=>[p.id,n]));
-export const money = cents => (cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
+// Preserve the benchmark's integer ratios while using tiny testnet amounts.
+export const ECONOMY = Object.freeze({currency:'USDC',unitsPerUsdc:100000,microsPerUnit:10,tokenDecimals:6,stake:50000,capital:50000,dailyFee:200});
+export const money = units => (units/ECONOMY.unitsPerUsdc).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:5});
+// Presentation only: one milli-USDC is 100 game units. Accounting stays in integer units.
+export const gameMoney = units => (units/(ECONOMY.unitsPerUsdc/1000)).toLocaleString('en-US',{maximumFractionDigits:2});
+export const gameMoneyText = text => String(text??'').replace(/\$([\d,]+(?:\.\d+)?)/g,(_,amount)=>`${gameMoney(Number(amount.replaceAll(',',''))*ECONOMY.unitsPerUsdc)} mUSDC`);
 export function createGame({seed=42,mode='demo',startDate='2025-01-01',salesModel=SALES_MODEL,registrationStake=REGISTRATION_STAKE,startingCash=STARTING_CASH}={}) {
   if(!Number.isInteger(seed)||seed<0||seed>4294967295) throw new Error('Seed must be an unsigned 32-bit integer.');
-  if(!Number.isInteger(registrationStake)||registrationStake<REGISTRATION_STAKE) throw new Error('Registration stake must be at least $500.');
-  if(!Number.isInteger(startingCash)||startingCash<STARTING_CASH) throw new Error('Starting cash must be at least $500.');
+  if(!Number.isInteger(registrationStake)||registrationStake<REGISTRATION_STAKE) throw new Error('Registration stake must be at least 0.50 USDC.');
+  if(!Number.isInteger(startingCash)||startingCash<STARTING_CASH) throw new Error('Starting cash must be at least 0.50 USDC.');
   const calendar=dateForDay(startDate,0);
   validateSalesModel(salesModel,PRODUCTS);
   return {version:4,round:1,requiredAgents:REQUIRED_AGENTS,registrationStake,startingCash,seed,rng:seed||1,day:0,mode,startDate,calendar,salesModel:structuredClone(salesModel),salesReport:[],customerTransactions:[],transactionHistory:[],daySituation:null,phase:'lobby',finishReason:null,weather:'Mild',unitsSoldToday:0,customerBudgetTotal:0,customerBudgetRemaining:0,customerBudgetSpent:0,closingAdjustment:0,agents:PERSONALITIES.map(a=>({...a,registered:false,registrationPaid:0,entryBalance:0,cash:0,inventory:quantities(),storage:quantities(),prices:Object.fromEntries(PRODUCTS.map(p=>[p.id,p.retail])),orders:[],revenue:0,spending:0,fees:0,refunds:0,sold:0,missedFees:0,arrears:0,active:false,memory:'',rationale:'Waiting to register for the round.',lastSales:quantities(),lastRevenue:0})),history:[],log:[],nextLogId:1};
@@ -52,7 +57,9 @@ export function startRound(state){
   log(s,null,'round',`Round ${s.round} started with ${money(s.customerBudgetTotal)} in the customer wallet.`);
   return s;
 }
-export function quote(product,supplier,quantity){return Math.round(product.cost*supplier.multiplier*(quantity>=24?0.92:1));}
+// Match the escrow's integer half-up rounding. Floating point turns, for
+// example, 90 * 1.15 into 103.49999999999999 instead of the exact 103.5.
+export function quote(product,supplier,quantity){return Math.floor((product.cost*Math.round(supplier.multiplier*100)*(quantity>=24?92:100)+5000)/10000);}
 export function prepareDay(state){
   const s=structuredClone(state);
   if(s.phase==='finished') return s;
@@ -61,7 +68,7 @@ export function prepareDay(state){
   if(s.version!==4)throw new Error('Start a new round to use the updated game rules.');
   s.calendar=dateForDay(s.startDate,s.day);
   s.weather=weatherForDay(s.seed,s.calendar.date,s.salesModel);
-  s.unitsSoldToday=0;s.salesReport=[];s.customerTransactions=[];
+  s.unitsSoldToday=0;s.salesReport=[];s.customerTransactions=[];s.supplierPayments=[];
   const weekday=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][s.calendar.weekday];
   const traffic=s.salesModel.calibration.weekdays[s.calendar.weekday];
   s.daySituation={date:s.calendar.date,weekday,weather:s.weather,trafficMultiplier:traffic,seasonMultiplier:s.salesModel.calibration.months[s.calendar.month],headline:`${weekday} · ${s.weather} weather · ${traffic>=1.1?'busy':traffic<1?'quiet':'normal'} expected foot traffic`,weatherEffect:s.weather==='Hot'?'Customers favor drinks in the heat.':s.weather==='Rainy'?'Rain reduces demand across drinks and snacks.':'Mild weather leaves product demand unchanged.'};
@@ -77,7 +84,7 @@ export function prepareDay(state){
 }
 export function observation(s,id){
   const self=s.agents.find(a=>a.id===id);if(!self)throw new Error('Unknown agent');
-  return structuredClone({round:s.round,day:s.day,weather:s.weather,date:s.calendar.date,daySituation:s.daySituation,customerBudget:{total:s.customerBudgetTotal,remaining:s.customerBudgetRemaining,spent:s.customerBudgetSpent},self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer USD cents',registrationStake:s.registrationStake,startingCash:s.startingCash,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Highest bank cash when the shared customer budget reaches zero; stock has no liquidation value',settlement:'Each agent pays a registration stake into the shared customer wallet and separately receives starting operating cash. Orders are paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales drain the customer wallet and settle automatically. The final sale may be paid with the exact remaining wallet balance. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt or real purchases.',customerChoice:'Daily product demand uses price elasticity against a reference price, baseline sales, weekday, month, weather, assortment variety, noise and inventory caps. Competing machines share per-product demand weighted by their standalone expected sales. This follows the public paper structure with local calibration and a local Arena allocation rule.'}});
+  return structuredClone({round:s.round,day:s.day,weather:s.weather,date:s.calendar.date,daySituation:s.daySituation,customerBudget:{total:s.customerBudgetTotal,remaining:s.customerBudgetRemaining,spent:s.customerBudgetSpent},self,products:PRODUCTS,suppliers:SUPPLIERS,competitors:s.agents.filter(a=>a.id!==id).map(a=>({id:a.id,name:a.name,prices:a.prices,active:a.active})),recentEvents:s.log.filter(e=>e.agent===id||e.agent===null).slice(-35),rules:{currency:'integer game units; 100000 units = 1 USDC',economy:ECONOMY,registrationStake:s.registrationStake,startingCash:s.startingCash,dailyFee:200,capacityPerProduct:30,storageAndTransitPerProduct:240,maxOrdersPerDay:12,score:'Highest bank cash when the shared customer budget reaches zero; stock has no liquidation value',settlement:'Each agent pays a registration stake into the shared customer wallet and separately receives starting operating cash. Orders are paid immediately. Deliveries enter storage before decisions; load them explicitly. Sales drain the customer wallet and settle automatically. The final sale may be paid with the exact remaining wallet balance. Ten consecutive unpaid daily fees eliminates a machine. Arrears are settled before new fees. No debt. Local practice simulates funds; Arc seasons settle test USDC onchain.',customerChoice:'Daily product demand uses price elasticity against a reference price, baseline sales, weekday, month, weather, assortment variety, noise and inventory caps. Competing machines share per-product demand weighted by their standalone expected sales. This follows the public paper structure with local calibration and a local Arena allocation rule.'}});
 }
 export function validateDecision(d){
   if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Decision must be an object.');
@@ -92,7 +99,7 @@ export function validateDecision(d){
   for(const o of d.orders){if(!o||!PRODUCTS.some(p=>p.id===o.product)||!SUPPLIERS.some(p=>p.id===o.supplier)||!Number.isInteger(o.quantity)||o.quantity<1||o.quantity>120)throw new Error('Invalid order.');}
   return d;
 }
-export function settleDay(state,decisions){
+export function settleDay(state,decisions,{supplyLimits}={}){
   if(state.phase!=='deciding')throw new Error('Prepare the day before settling.');
   const s=structuredClone(state);
   // All agents decide from the same pre-action snapshot; arrival randomness is independent of execution timing.
@@ -103,12 +110,17 @@ export function settleDay(state,decisions){
     log(s,a.id,'decision',d.rationale);
     if(Object.keys(d.prices).length)log(s,a.id,'pricing',`Updated ${Object.keys(d.prices).length} price${Object.keys(d.prices).length===1?'':'s'}: ${Object.entries(d.prices).map(([id,price])=>`${PRODUCTS.find(p=>p.id===id).name} ${money(price)}`).join(', ')}.`);
     for(const [id,n] of Object.entries(d.load)){const moved=Math.min(n,a.storage[id],30-a.inventory[id]);a.storage[id]-=moved;a.inventory[id]+=moved;if(moved)log(s,a.id,'restock',`Loaded ${moved} ${PRODUCTS.find(p=>p.id===id).name} into the machine.`);}
+    let supplySpent=0;
+    const supplyLimit=supplyLimits?supplyLimits[a.id]:Infinity;
+    if(supplyLimits&&(!Number.isSafeInteger(supplyLimit)||supplyLimit<0))throw new Error('Invalid signed supplier limit.');
     for(const o of d.orders){
       const p=PRODUCTS.find(p=>p.id===o.product),supplier=SUPPLIERS.find(x=>x.id===o.supplier);
       const total=quote(p,supplier,o.quantity)*o.quantity;
+      if(supplySpent+total>supplyLimit){log(s,a.id,'rejected',`Order rejected: ${o.quantity} ${p.name} exceeds the remaining signed supplier limit. No payment or delivery created.`);continue;}
       const held=a.storage[p.id]+a.inventory[p.id]+a.orders.filter(x=>x.product===p.id).reduce((n,x)=>n+x.quantity,0);
       if(total>a.cash||held+o.quantity>240){log(s,a.id,'rejected',`Order rejected: ${total>a.cash?'insufficient cash':'stock limit'}.`);continue;}
-      a.cash-=total;a.spending+=total;
+      a.cash-=total;a.spending+=total;supplySpent+=total;
+      s.supplierPayments.push({agent:a.id,product:p.id,supplier:supplier.id,quantity:o.quantity,amount:total});
       const delayed=random(s)<supplier.delay;const arrives=s.day+supplier.lead+(delayed?2:0);
       a.orders.push({...o,arrives,total});log(s,a.id,'order',`Ordered ${o.quantity} ${p.name} for ${money(total)} · day ${arrives}${delayed?' (delayed)':''}.`);
     }
@@ -159,7 +171,7 @@ export function demoDecision(s,id){
       if(cost<=budget&&quantity>0){orders.push({product:p.id,supplier:supplier.id,quantity});budget-=cost;}
     }
   }
-  const rationale={atlas:`Match the lowest competitor with a small price edge${s.weather==='Hot'?', with a hot-weather drinks adjustment':''}. Replenish through Bay Wholesale.`,penny:'Keep prices accessible. Use bulk stock from Budget Depot to support volume.',nova:'Maintain premium margins and buy fast deliveries to protect availability.',sage:'Keep a $120 cash reserve and replenish conservatively.'}[id];
+  const rationale={atlas:`Match the lowest competitor with a small price edge${s.weather==='Hot'?', with a hot-weather drinks adjustment':''}. Replenish through Bay Wholesale.`,penny:'Keep prices accessible. Use bulk stock from Budget Depot to support volume.',nova:'Maintain premium margins and buy fast deliveries to protect availability.',sage:`Keep a ${money(12000)} cash reserve and replenish conservatively.`}[id];
   return {prices,load,orders,rationale,memory:`Day ${s.day}: ${money(a.cash)} cash. ${orders.length} replenishment orders. Built-in ${a.strategy.toLowerCase()} policy.`};
 }
 export function stepDemo(s){const next=prepareDay(s);if(next.phase==='finished')return next;return settleDay(next,Object.fromEntries(next.agents.filter(a=>a.active).map(a=>[a.id,demoDecision(next,a.id)])));}

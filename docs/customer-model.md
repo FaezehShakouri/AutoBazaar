@@ -18,7 +18,7 @@ Therefore this implementation follows the **published sequence**, not the undisc
 
 ## Local calibration, isolated in `dist/sales-model.js`
 
-The existing six-product catalog has a frozen, hand-authored calibration with reference price in cents, negative signed elasticity, and baseline units per day. These are local estimates, **not GPT-4o output or Andon Labs values**. They are validated once when creating a game and copied into the game state. All agents use the same cache. `createGame({salesModel})` accepts a complete replacement calibration for experiments; malformed values fail before a round begins.
+The existing six-product catalog has a frozen, hand-authored calibration with reference price in game units, negative signed elasticity, and baseline units per day. These are local estimates, **not GPT-4o output or Andon Labs values**. They are validated once when creating a game and copied into the game state. All agents use the same cache. `createGame({salesModel})` accepts a complete replacement calibration for experiments; malformed values fail before a round begins.
 
 Our explicit mathematical interpretation is:
 
@@ -42,7 +42,7 @@ Weekday indexing is Sunday-first; calendar arithmetic uses UTC to avoid host-tim
 
 For each product, calculate every stocked, active machine’s standalone expected demand. The shared product pool is the largest of those expectations, perturbed by one shared noise draw and rounded. Allocate its units with probability proportional to each machine’s expected demand, excluding closed, zero-demand, and out-of-stock machines. Inventory is decremented by the allocation; unfilled demand does not transfer to a different product. Stockouts during allocation cause remaining units to be offered to eligible machines.
 
-Every completed sale draws its actual payment from the round's shared customer wallet. Each of the four agents pays a fixed $500 registration stake into that wallet and separately receives $500 of operating cash. The registration stakes therefore create a $2,000 customer wallet without reducing the agents' starting game cash. When the remaining wallet is below the next item's listed price, that final purchase pays the exact remainder. The difference is recorded as `closingAdjustment`; this explicit game rule guarantees that an active round can finish at exactly zero cents instead of retaining unspendable change. If all agents close first, the round ends with the residual wallet reported.
+Every completed sale draws its actual payment from the round's shared customer wallet. Each of the four agents pays a fixed 0.50 test USDC registration stake into that wallet and separately receives 0.50 test USDC of operating cash. The registration stakes therefore create a 2.00 test USDC customer wallet without reducing the agents' starting game cash. When the remaining wallet is below the next item's listed price, that final purchase pays the exact remainder. The difference is recorded as `closingAdjustment`; this explicit game rule guarantees that an active round can finish at exactly zero game units instead of retaining unspendable change. If all agents close first, the round ends with the residual wallet reported.
 
 This keeps machines competing and prevents multiplying market demand by the number of machines. It is **our Arena extension**, not an equation published by Andon Labs. With just one active stocked machine it reduces to the paper-shaped single-machine pipeline. There is no visitor count, per-visitor drink/snack draw, fixed outside option, or customer identity model.
 
@@ -61,3 +61,7 @@ Click a character to inspect its matching receipt, and click a machine to inspec
 We removed the fabricated festival/closure schedule and automatic 1.2% refunds. Vending-Bench 2 describes customer complaints, but provides no numerical rate; an interactive complaint/refund system is not implemented here. Sales revenue still settles immediately into bank cash. The published cash-collection and delayed-card-settlement mechanics remain outside this customer-demand change. Supplier procurement, fees and existing machine capacities also remain local game rules.
 
 State schema version is now 4. Start a fresh round rather than combining historical sales from older rules. Old exports are not overwritten or migrated.
+
+## Low-cost Arc scale
+
+The test economy scales all financial values down 1000 times from the earlier dollar display. Its existing integer ratios and demand calibration stay unchanged: 100000 game units equal one USDC, and 150 units now means 0.00150 USDC. This preserves elasticity ratios and stocking strategies. [Arc payments](arc-payments.md) documents the six-decimal token conversion, customer escrow, atomic daily settlements, fees and refunds. The server still computes the published model structure offchain.

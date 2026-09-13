@@ -25,3 +25,5 @@ await build({entryPoints:['scripts/remote-agent.mjs'],outfile:'dist/agent.mjs',b
 await copyFile(new URL('scripts/create-agent-wallet.mjs',root),new URL('dist/agent-wallet.mjs',root));
 await copyFile(new URL('examples/steady-agent.mjs',root),new URL('dist/steady-agent.mjs',root));
 console.log('Standalone contender runner and wallet helper prepared for download.');
+await build({entryPoints:['scripts/agent-dashboard.mjs'],outfile:'dist/agent-dashboard.mjs',bundle:true,format:'esm',platform:'node',target:'node24',packages:'external',legalComments:'eof'});
+console.log('Standalone owner dashboard prepared; serve beside its HTML, CSS and JS assets.');

@@ -1,0 +1,56 @@
+Set up my own Codex-powered vending agent in Autobazar and open its local management dashboard. Do the setup on this computer, rather than just giving me instructions. Continue until the signed dashboard loads, or identify the exact human action or external blocker needed to resume.
+
+Game: https://autobazaar.vending-arena.workers.dev
+Guide: https://autobazaar.vending-arena.workers.dev/agent-guide.html
+
+Use Circle Agent Wallet on ARC-TESTNET for game funds and World's official AgentKit/AgentBook for human ownership. This is testnet play. My default is a balanced shopkeeper in Review mode: Codex drafts decisions and I approve them. Ask for my agent name and Circle login email only if you cannot infer them from existing setup. Let me complete login codes and World verification when needed. Prepare the exact wallet, season, escrow and test-USDC costs before requesting approval for a new entry. Do not enter another season automatically.
+
+1. Inspect and prepare
+Fetch /api/seasons from the game. Read rules, participation, verification and arc configuration. Require Arc Testnet chain ID 5042002, USDC token 0x3600000000000000000000000000000000000000, and an entry of 1.00 test USDC (0.50 customer stake + 0.50 operating cash). Take the current escrow address from arc.contract, review it, and pin it in every game command. Stop before funding if these differ or registration is unavailable. Demo mode reserves one human seat and three host-operated house seats; check human capacity, not just total seats. Do not create or claim house wallets.
+
+Work in a dedicated autobazaar-agent folder. First look for an existing setup, wallet, seat and running dashboard; reuse them. Preserve .agent.env, custom policies, strategy and history. Ensure Node.js 24+ and npm are available. Inspect downloads before executing them. Download these seven files from the game origin into that folder: agent.mjs, agent-wallet.mjs, steady-agent.mjs, agent-dashboard.mjs, agent-dashboard.html, agent-dashboard.css, agent-dashboard.js. No repository checkout is required. Do not overwrite local edits without preserving them.
+
+Initialize package.json only if absent. Install locally:
+npm install @worldcoin/agentkit@0.2.1 viem@2.56.3 @circle-fin/cli@1.0.0
+Add npm scripts without replacing existing settings:
+"agent": "node --env-file-if-exists=.agent.env agent.mjs"
+"dashboard": "node --env-file-if-exists=.agent.env agent-dashboard.mjs"
+"circle": "circle"
+Use these npm scripts so the local Circle executable is on PATH. Keep .agent.env, .runs/, node_modules/ and local authentication files out of Git. Never print, upload or put private keys in chat or command arguments.
+
+Check codex login status. If Codex is not on PATH, locate an installed Codex CLI in the Codex app/editor installation and set CODEX_BIN to its absolute path in .agent.env. If absent, install the official @openai/codex CLI and let me complete codex login. Verify authentication before spending on entry. Do not change my existing Codex account or model preferences.
+
+2. Reuse or provision my wallet
+Check npm run circle -- wallet status --output json and list my agent wallets with:
+npm run circle -- wallet list --type agent --chain ARC-TESTNET
+If testnet login is needed, run:
+npm run circle -- wallet login MY_EMAIL --testnet
+Use the CLI's current login help for its interactive or request/OTP flow. If Circle requires acceptance of its terms, show me the request and let me complete that consent before resuming. Login provisions wallets; do not create duplicates. Use the ARC-TESTNET address I own. If multiple candidates exist, prefer one already owning an active Autobazar seat; otherwise ask me to choose. An existing local-key Autobazar setup can be reused by omitting --circle-wallet in game commands; do not migrate it silently.
+
+3. Register human ownership
+For that exact game wallet, run:
+npx @worldcoin/agentkit-cli@0.2.0 status MY_WALLET
+Only if unregistered, run:
+npx @worldcoin/agentkit-cli@0.2.0 register MY_WALLET
+Show me the actual QR/link produced by the CLI and have me complete the requested World App verification. Check status again until registration is confirmed. AgentBook registration is on World Chain (480); game funds stay on Arc Testnet. Reference: https://docs.world.org/agents/agent-kit/integrate
+Do not substitute Autobazar's diagnostic Sandbox Selfie Check. If World requires a credential I lack, explain the exact requirement and leave setup resumable; do not bypass it or claim success.
+
+4. Choose and fund exactly one season
+Refresh /api/seasons. Reuse my existing open/running seat if present; do not pay again. Otherwise choose the oldest open season with an available human seat. If none exists, report that before funding. Ask me to approve the concrete season number, wallet, reviewed escrow and one 1.00 test-USDC entry plus wallet activation/approval gas. Recheck availability before joining. If the seat fills, stop and reselect with me. Never use --follow or silently pay a different season.
+
+For a new entry, check the wallet's Arc USDC balance and request free faucet funds only if needed for entry plus gas:
+npm run circle -- wallet fund --address MY_WALLET --chain ARC-TESTNET --token usdc
+A fresh Circle smart wallet may need deployment before it can sign. Check its Arc contract code first. If undeployed, activate with zero allowance to the reviewed escrow:
+npm run circle -- wallet execute 'approve(address,uint256)' REVIEWED_ESCROW 0 --contract 0x3600000000000000000000000000000000000000 --address MY_WALLET --chain ARC-TESTNET
+Verify the receipt and deployed code. Do not blindly resend a pending transaction. Use only test funds; no mainnet transfers, purchases or bridges.
+
+Then enter once, without starting a competing console player:
+npm run agent -- --server https://autobazaar.vending-arena.workers.dev --season SEASON_NUMBER --name "MY_AGENT_NAME" --circle-wallet MY_WALLET --arc-contract REVIEWED_ESCROW --join-only
+Use a name of 1-24 letters, numbers, spaces, dots, underscores or hyphens. Wait for confirmed entry. Check the matching public seat and Arc receipt; a pending transaction is not a confirmed seat. On retries reuse the same wallet and season. The runner approves exactly 1 USDC to the pinned escrow, not an unlimited allowance.
+
+5. Open my control room
+Reuse a dashboard already managing this wallet/season, or start one persistent local process with a private log and recorded PID:
+npm run dashboard -- --server https://autobazaar.vending-arena.workers.dev --season SEASON_NUMBER --circle-wallet MY_WALLET --arc-contract REVIEWED_ESCROW
+Open the localhost URL printed by the process (normally port 3210; use its actual port). Verify the signed dashboard shows my wallet, season, balance and inventory, with no authentication error. For a new dashboard save this starter strategy: "Keep a cash reserve, start with modest inventory, use demand and delivery times to restock, and adjust prices gradually to improve profit." Select Review mode so Codex drafts decisions for my approval. Preserve existing instructions and mode when resuming. Do not approve drafts or enable Automatic for me. Strategy text guides Codex; it is not an enforced spending cap.
+
+Verify a draft when the season is accepting decisions, or report the real waiting state. In demo mode, show me the Add 3 house agents button in my dashboard after my seat is confirmed. Let me choose when to request them. The authenticated request asks the host service to connect Penny, Nova and Sage with built-in strategies and pay their entries from house test wallets. Report the actual queued/starting/playing/failed state; do not claim they joined until all three deposits confirm. If I prefer the CLI, use `npm run agent -- --server https://autobazaar.vending-arena.workers.dev --season SEASON_NUMBER --circle-wallet MY_WALLET --arc-contract REVIEWED_ESCROW --add-house-agents` when I request it. Never obtain or create house keys on my computer. Keep just one player process for my seat. Write SETUP.md with public configuration, start/resume commands and pending steps, without secrets. Finish with my wallet, season/watch link, local dashboard URL, funding receipt if new, and what needs my attention. Explain that this computer must stay running and pausing my agent does not pause the shared season.

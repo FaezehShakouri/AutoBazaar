@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
 import {DayPlayback} from './playback.js';
-import {PRODUCTS,PERSONALITIES} from './engine.js';
+import {PRODUCTS,PERSONALITIES,gameMoney} from './engine.js';
 
 const COLORS=[0x72b8dc,0xdd796a,0xa27c5c,0xe8be62,0xc9a3da,0x88b780];
 const SPOTS=[-7.2,-2.4,2.4,7.2];
@@ -17,7 +17,7 @@ export class PlazaWorld {
     this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));this.renderer.shadowMap.enabled=true;
     this.renderer.shadowMap.type=THREE.PCFShadowMap;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.25;
-    this.renderer.domElement.setAttribute('aria-label','Interactive 3D vending plaza. Drag to orbit, scroll to zoom, click a machine or customer to inspect.');
+    this.renderer.domElement.setAttribute('aria-label','Interactive 3D Autobazar. Drag to orbit, scroll to zoom, click a machine or customer to inspect.');
     this.renderer.domElement.tabIndex=0;host.append(this.renderer.domElement);
     this.camera=new THREE.PerspectiveCamera(40,1,.1,140);this.camera.position.set(17,19,26);
     this.controls=new OrbitControls(this.camera,this.renderer.domElement);this.controls.target.set(0,.6,0);
@@ -76,7 +76,7 @@ export class PlazaWorld {
     this.box(s,2.4,1.3,1.15,0xe7d9b1,-10,.8,-9);this.box(s,.7,.95,1.13,0xb86e58,-8.75,.63,-9);
     this.box(s,.03,.48,.88,0x597d83,-8.37,1.03,-9);
     for(const x of [-10.6,-8.8])for(const z of [-9.63,-8.37]){const w=this.cylinder(s,.29,.29,.15,0x30413c,x,.3,z);w.rotation.x=Math.PI/2;}
-    const entry=this.label('VENDING  /  PLAZA','#ffffff',4.3);entry.position.set(0,.52,9.6);s.add(entry);
+    const entry=this.label('AUTOBAZAR','#ffffff',4.3);entry.position.set(0,.52,9.6);s.add(entry);
   }
   tree(x,z,size){const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(size);this.scene.add(g);this.cylinder(g,.16,.25,2.3,0x826d4d,0,1.15);this.ball(g,1.15,0x759360,0,2.9);this.ball(g,.95,0x8da76e,-.55,3.5,.1);this.ball(g,.8,0x657f55,.65,3.45,-.2);}
   bench(x,z){const g=new THREE.Group();g.position.set(x,0,z);this.scene.add(g);for(let i=0;i<3;i++)this.box(g,2.25,.11,.16,0xb29163,0,.65,-.24+i*.2);for(let i=0;i<3;i++)this.box(g,2.25,.18,.1,0xb29163,0,.92+i*.22,-.38);for(const dx of [-.85,.85])this.box(g,.12,.7,.65,0x425c4e,dx,.32);}
@@ -177,7 +177,7 @@ export class PlazaWorld {
     a.g.userData.status=age<3.7?'Walking to the machine':age<4?'Choosing a product':age<4.7?'Collecting purchase':'Leaving with purchase';
   }
   purchase(receipt){const m=this.machines.find(m=>m.agent.id===receipt.agent);m.stock[receipt.product]=Math.max(0,m.stock[receipt.product]-1);this.updateStock(m);m.flash=1;
-    const sprite=this.label(`+$${(receipt.payment/100).toFixed(2)}`,m.agent.color,1.5);sprite.position.set(m.g.position.x,3.5,-1.3);this.scene.add(sprite);this.floaters.push({sprite,life:0});this.callbacks.onReceipt?.(receipt);
+    const sprite=this.label(`+${gameMoney(receipt.payment)}`,m.agent.color,1.5);sprite.position.set(m.g.position.x,3.5,-1.3);this.scene.add(sprite);this.floaters.push({sprite,life:0});this.callbacks.onReceipt?.(receipt);
   }
   removeFloater(f){this.scene.remove(f.sprite);const texture=f.sprite.material.map;this.textures.delete(texture);texture.dispose();f.sprite.material.dispose();}
   skip(){if(!this.playback.active)return;for(const receipt of this.playback.advance(this.playback.duration))this.purchase(receipt);this.report();this.finish();}

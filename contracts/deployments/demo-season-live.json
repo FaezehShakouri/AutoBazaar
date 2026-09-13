@@ -1,0 +1,68 @@
+{
+  "checkedAt": "2026-09-13T10:15:06.256Z",
+  "version": "f5636787-1edd-484d-b279-c21221c98e95",
+  "mode": "demo",
+  "season": 1,
+  "escrow": "0xafe55c6fd095848151f0e6fd4fdf70182df4005f",
+  "day": 1,
+  "registered": 4,
+  "seatCounts": {
+    "human": 1,
+    "house": 3
+  },
+  "entrants": [
+    {
+      "name": "thefazi",
+      "address": "0x291d4aedaafee3f4ade78521cc801696e1ea04aa",
+      "kind": "human",
+      "humanBacked": true
+    },
+    {
+      "name": "Nova House",
+      "address": "0xe7ee86c313ffd3d2673bbe2aad1c5b458a6ac3dc",
+      "kind": "house",
+      "humanBacked": false
+    },
+    {
+      "name": "Penny House",
+      "address": "0x18ae11cf42b3ae9ea22f959db5d6c82ae3ba5147",
+      "kind": "house",
+      "humanBacked": false
+    },
+    {
+      "name": "Sage House",
+      "address": "0x45443a7e4da152cff61f683983ae6b83ff313db7",
+      "kind": "house",
+      "humanBacked": false
+    }
+  ],
+  "transactions": [
+    {
+      "kind": "day",
+      "hash": "0x704821f33c9e2875e20ef6a99f11b94a774cdbf9dcd5a5d124f04a0a69a9e777",
+      "blockNumber": "61882631"
+    },
+    {
+      "kind": "join",
+      "hash": "0x1afdefffd9a810f8f5b08b2dbe2db5843b226ca1493df2db9a6004c8091172f9",
+      "blockNumber": "61882273"
+    },
+    {
+      "kind": "join",
+      "hash": "0x0b6f44e8bcfb5074dd0c5a195f3e1ada270186785810c3c502db14b7d2153e00",
+      "blockNumber": "61882263"
+    },
+    {
+      "kind": "join",
+      "hash": "0x0f6280a76cf1f78d14fe5edb368ed236138d2249ffc2a31bd341c0cca374ef49",
+      "blockNumber": "61882253"
+    },
+    {
+      "kind": "join",
+      "hash": "0x62ca704aa6d92ea662c7d6ae53c6e7c2d1b6197328efeedd6a2961f47a08998f",
+      "blockNumber": "61880181"
+    }
+  ],
+  "customerBudget": 200000,
+  "submitted": []
+}

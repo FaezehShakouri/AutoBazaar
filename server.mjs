@@ -9,6 +9,11 @@ import {SeasonStore} from './lib/season-store.mjs';
 import {openSeasonDatabase} from './lib/sqlite.mjs';
 import {createSeasonApi} from './lib/season-api.mjs';
 import {agentBookConfig} from './lib/agentkit-auth.mjs';
+import {arcConfig} from './lib/arc.mjs';
+import {seasonIdentity} from './lib/season-identity.mjs';
+import {seasonParticipation} from './lib/season-participation.mjs';
+import {ArcChain} from './lib/arc-chain.mjs';
+import {ArcSeasonStore} from './lib/arc-season-store.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
 export function createArenaServer({decide=codexDecision,saveDirectory=join(root,'.runs'),seasons,book,bookConfig=agentBookConfig(),publicOrigin,worldEnv={}}={}){
@@ -75,13 +80,14 @@ export function createArenaServer({decide=codexDecision,saveDirectory=join(root,
         return json(res,404,{error:'Unknown endpoint.'});
       }
       if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'Method not allowed.'});
-      const files=Object.fromEntries(['index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','seasons.html','seasons.js','seasons.css','season-view.js','world-id.html','world-id.js','agent-guide.html','agent.mjs','agent-wallet.mjs','steady-agent.mjs','idkit_wasm_bg.wasm','THIRD-PARTY-NOTICES.txt','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']=publicOrigin?'seasons.html':'index.html';files['/seasons']='seasons.html';files['/play']='index.html';files['/world-id']='world-id.html';
+      if(path==='/world-id'||path==='/world-id.html'){res.writeHead(302,{Location:'/agent-guide.html#register'});res.end();return;}
+      const files=Object.fromEntries(['logo.svg','arc-test-season.json','index.html','app.js','game-app.js','world.js','playback.js','engine.js','sales-model.js','style.css','game.css','plaza.css','seasons.html','seasons.js','seasons.css','season-view.js','world-id.html','world-id.js','agent-guide.html','agent-guide.css','agent-guide.js','agent-setup.txt','agent-dashboard.mjs','agent-dashboard.html','agent-dashboard.css','agent-dashboard.js','agent.mjs','agent-wallet.mjs','steady-agent.mjs','idkit_wasm_bg.wasm','THIRD-PARTY-NOTICES.txt','vendor/three.module.js','vendor/three.core.js','vendor/OrbitControls.js','vendor/THREE-LICENSE.txt'].map(file=>['/'+file,file]));files['/']=publicOrigin?'seasons.html':'index.html';files['/seasons']='seasons.html';files['/play']='index.html';files['/world-id-diagnostic']='world-id.html';
       if(!files[path])return json(res,404,{error:'Not found.'});
       const body=await readFile(join(root,'dist',files[path]));
-      res.writeHead(200,{'Content-Type':path.endsWith('.wasm')?'application/wasm':/\.m?js$/.test(path)?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
+      res.writeHead(200,{'Content-Type':path.endsWith('.svg')?'image/svg+xml':path.endsWith('.json')?'application/json':path.endsWith('.wasm')?'application/wasm':/\.m?js$/.test(path)?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.txt')?'text/plain':'text/html','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);
     }catch(e){json(res,400,{error:e.message});}
   });
-  if(seasons){const timer=setInterval(()=>{try{seasons.tick();}catch(e){console.error('Season clock:',e.message);}},1000);timer.unref();server.on('close',()=>clearInterval(timer));}
+  if(seasons){const timer=setInterval(async()=>{try{seasons.tick();await seasons.pump?.();}catch(e){console.error('Season clock:',e.message);}},1000);timer.unref();server.on('close',()=>clearInterval(timer));}
   return server;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
@@ -93,8 +99,9 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
     const publicOrigin=process.env.PUBLIC_ORIGIN||undefined,bindAddress=process.env.BIND_ADDRESS||'127.0.0.1';
     if(publicOrigin){const url=new URL(publicOrigin);if(url.origin!==publicOrigin||url.protocol!=='https:')throw Error('PUBLIC_ORIGIN must be an HTTPS origin without a trailing slash.');}
     if(!['127.0.0.1','localhost','::1'].includes(bindAddress)&&!publicOrigin)throw Error('Set PUBLIC_ORIGIN before binding a public interface.');
-    const bookConfig=agentBookConfig(process.env);
-    const seasons=new SeasonStore({db:openSeasonDatabase(process.env.SEASON_DB||join(root,'.runs','seasons.sqlite')),bookScope:bookConfig.scope,turnMs:Number(process.env.SEASON_TURN_SECONDS||180)*1000,intermissionMs:Number(process.env.SEASON_INTERMISSION_SECONDS||30)*1000});
+    const bookConfig=agentBookConfig(process.env),identity=seasonIdentity(process.env,bookConfig);
+    const arc=arcConfig(process.env),Store=arc?ArcSeasonStore:SeasonStore;
+    const seasons=new Store({arc:arc?new ArcChain(arc):undefined,db:openSeasonDatabase(process.env.SEASON_DB||join(root,'.runs',arc?`arc-${arc.contract.toLowerCase()}.sqlite`:'seasons.sqlite')),bookScope:identity.scope,participation:seasonParticipation(process.env),allowEmptyDemoMigration:process.env.ALLOW_EMPTY_DEMO_MIGRATION==='true',allowSingleHumanDemoMigration:process.env.ALLOW_SINGLE_HUMAN_DEMO_MIGRATION==='true',allowRetiredSandboxMigration:process.env.MIGRATE_EMPTY_SANDBOX_TO_AGENTBOOK==='true',turnMs:Number(process.env.SEASON_TURN_SECONDS||180)*1000,intermissionMs:Number(process.env.SEASON_INTERMISSION_SECONDS||30)*1000});
     const server=createArenaServer({seasons,bookConfig,publicOrigin,worldEnv:process.env});
     server.on('close',()=>seasons.close());
     server.on('error',error=>{
@@ -103,7 +110,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
       }else console.error(`Cannot start Vending Arena: ${error.message}`);
       process.exitCode=1;
     });
-    server.listen(port,bindAddress,()=>console.log(`Vending Plaza: ${publicOrigin||`http://127.0.0.1:${port}`} · Seasons: /seasons`));
+    server.listen(port,bindAddress,()=>console.log(`Autobazar: ${publicOrigin||`http://127.0.0.1:${port}`} · Seasons: /seasons`));
     for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>server.close());
   }
 }

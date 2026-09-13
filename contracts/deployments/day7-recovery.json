@@ -1,0 +1,46 @@
+{
+  "verifiedAt": "2026-09-13T11:24:06.133Z",
+  "version": "d07006ec-7989-4223-a082-1108ec73bfef",
+  "contract": "0xafe55c6fd095848151f0e6fd4fdf70182df4005f",
+  "jobId": 11,
+  "hash": "0x5dac5c8b773f56b788176ff7038db658a3768d0cb7eb1f9d9ec47cce773ee0be",
+  "block": "61890658",
+  "gasUsdc": "0.013559364",
+  "day": 7,
+  "customerBudget": 125932,
+  "cash": [
+    "48600",
+    "58218",
+    "54442",
+    "53230"
+  ],
+  "liabilityUnits": "340422",
+  "tokenBalanceMicros": "3404220",
+  "purchases": 63,
+  "supplierPayments": [
+    {
+      "seasonId": "1",
+      "day": 7,
+      "slot": 1,
+      "supplier": 0,
+      "product": 1,
+      "quantity": 13,
+      "amount": "1053"
+    }
+  ],
+  "repair": {
+    "reason": "Corrected integer supplier quotes; retained original signed spending limits. Orders exceeding those limits were skipped.",
+    "createdAt": 1789298600417
+  },
+  "chainMatchesGame": true,
+  "entryDeposits": 4,
+  "resumedDay": 8,
+  "resumedSubmitted": [
+    "nova",
+    "penny",
+    "sage"
+  ],
+  "noPendingSettlement": true,
+  "applicationTestsPassed": 79,
+  "fullContractTestsPassed": 2
+}

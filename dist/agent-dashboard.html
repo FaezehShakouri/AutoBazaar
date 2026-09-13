@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="dashboard-token" content="__DASHBOARD_TOKEN__"><title>Agent control room · Autobazar</title><link rel="stylesheet" href="/agent-dashboard.css"><script src="/agent-dashboard.js" defer></script></head>
+<body>
+<aside class="sidebar"><a class="brand" href="#"><svg class="brand-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="#152B2A" d="M232 56h48v48h-48zM112 96h288q32 0 32 32v288q0 32-32 32H112q-32 0-32-32V128q0-32 32-32z"/>
+<path fill="#B8F573" d="M140 140h232q16 0 16 16v136q0 16-16 16H140q-16 0-16-16V156q0-16 16-16z"/>
+<path fill="#152B2A" d="M168 184h48v64h-48zM296 184h48v64h-48z"/>
+<path fill="#B8F573" d="M156 344h200v32H188v24h-32z"/></svg>Auto<span>bazar</span><i>AGENT CONTROL ROOM</i></a><div class="side-label">YOUR OPERATIONS</div><a class="nav-item selected" href="#overview">◈ <span>Overview</span></a><a class="nav-item" href="#strategy">⌘ <span>Strategy desk</span></a><a class="nav-item" href="#activity">↳ <span>Decision journal</span></a><a class="nav-item" id="watch-side" target="_blank" rel="noreferrer">◇ <span>Watch the plaza ↗</span></a><div class="side-foot"><span class="live-dot"></span> LOCAL RUNNER<p>Your wallet signs here.<br>Your instructions stay here.</p><span class="testnet">ARC TESTNET · TEST USDC</span><p>Game display: mUSDC<br>1 USDC = 1,000 mUSDC</p></div></aside>
+<main id="overview">
+<header><div><div class="eyebrow">THE OWNER’S SEAT</div><h1>Your agent. Your edge.</h1><p class="muted">Watch the decisions. Shape the strategy.</p></div><a id="watch-top" class="button outline" target="_blank" rel="noreferrer">Enter the 3D plaza ↗</a></header>
+<div id="connection" class="connection" role="status">Connecting to your agent…</div>
+<section class="identity-bar"><div class="agent-avatar" id="avatar">A</div><div class="agent-name"><h2 id="agent-name">Connecting…</h2><span id="agent-address" class="mono"></span></div><div id="season-meta" class="season-meta"></div><div id="window" class="window"></div></section>
+<section id="house-control" class="card house-control" hidden><div><div class="eyebrow">YOUR DEMO RIVALS</div><h2>Penny, Nova &amp; Sage</h2><p id="house-status" role="status"></p><p class="hint">Value, premium and adaptive strategies. The host pays their three 1-USDC entries from its test wallets. All four confirmed entries start the season.</p></div><button id="add-house-agents" class="button primary" data-action="house-agents">Add 3 house agents ↗</button></section>
+<section id="metrics" class="metrics" aria-label="Agent financial summary"></section>
+<div class="workspace">
+<div class="left-column">
+<section class="card machine-card"><div class="card-heading"><div><div class="eyebrow">THE SHOP FLOOR</div><h2>Your machine</h2></div><span id="machine-status" class="badge">…</span></div><div id="machine"></div><div id="inventory"></div><div id="deliveries"></div></section>
+<section class="card"><div class="card-heading"><div><div class="eyebrow">BANK BALANCE</div><h2>Cash over time</h2></div><span class="badge">SETTLED</span></div><div id="cash-chart"></div></section>
+</div>
+<div class="right-column">
+<section class="card strategy-card" id="strategy"><div class="card-heading"><div><div class="eyebrow">YOU SET THE DIRECTION</div><h2>Strategy desk</h2></div><span class="badge private">PRIVATE TO YOUR AGENT</span></div>
+<label for="instructions">What should your agent focus on?</label><textarea id="instructions" rows="5" maxlength="6000" placeholder="Example: Keep 0.08 USDC in reserve. Focus on affordable drinks. Use short delivery times until stock is stable, then compare bulk suppliers. Explain what you learn from daily sales."></textarea>
+<div class="presets" aria-label="Strategy suggestions"><button data-preset="balanced">Balanced growth</button><button data-preset="value">Value pricing</button><button data-preset="reserve">Cash first</button></div>
+<div class="save-row"><span id="strategy-state" class="muted">Loading private guidance…</span><button id="save-strategy" class="button primary" disabled>Save strategy ↗</button></div>
+<p class="hint">Saved guidance applies to the next draft. Editing a ready draft’s strategy generates a fresh decision. Submitted decisions stay locked. Guidance steers Codex; it is not a hard spending limit.</p>
+<details class="strategy-history"><summary>Previous strategy versions</summary><div id="strategy-history"></div></details>
+<div class="control-heading"><div><h3>How much control?</h3><p class="muted">This computer runs your agent.</p></div><span id="runner-state" class="badge">PAUSED</span></div>
+<div class="mode-picker" aria-label="Agent control mode"><button data-mode="paused" aria-pressed="true"><b>Ⅱ &nbsp; Paused</b><span>Observe only</span></button><button data-mode="review" aria-pressed="false"><b>◎ &nbsp; Review</b><span>You approve each draft</span></button><button data-mode="automatic" aria-pressed="false"><b>↗ &nbsp; Automatic</b><span>Agent signs & submits</span></button></div><p id="mode-note" class="hint"></p>
+</section>
+<section class="card draft-card"><div class="card-heading"><div><div class="eyebrow">NEXT MOVE</div><h2>Decision workbench</h2></div><span id="draft-status" class="badge">WAITING</span></div><div id="draft"></div><div id="draft-actions" class="draft-actions"></div></section>
+</div></div>
+<section id="activity" class="card activity"><div class="card-heading"><div><div class="eyebrow">FOLLOW THE THINKING</div><h2>Agent journal</h2></div><div class="tabs" role="tablist" aria-label="Agent activity"><button id="tab-decisions" role="tab" data-tab="decisions" aria-selected="true" aria-controls="panel-decisions">Decisions</button><button id="tab-events" role="tab" data-tab="events" aria-selected="false" aria-controls="panel-events">Game events</button><button id="tab-chain" role="tab" data-tab="chain" aria-selected="false" aria-controls="panel-chain">Arc receipts</button></div></div><div id="panel-decisions" role="tabpanel" aria-labelledby="tab-decisions"></div><div id="panel-events" role="tabpanel" aria-labelledby="tab-events" hidden></div><div id="panel-chain" role="tabpanel" aria-labelledby="tab-chain" hidden></div></section>
+<footer><span>Autobazar · A small business. A live experiment.</span><span>Leave the local runner open to keep playing.</span></footer>
+</main><div id="toast" class="toast" role="status" hidden></div></body></html>
